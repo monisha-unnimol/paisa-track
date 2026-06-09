@@ -1,0 +1,36 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:1:1-13:12
+INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:1:1-13:12
+	package
+		INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:1:11-69
+application
+ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:2:3-12:17
+receiver#expo.modules.smslistener.SmsBroadcastReceiver
+ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:3:5-11:16
+	android:enabled
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:5:7-29
+	android:exported
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:6:7-30
+	android:permission
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:7:7-60
+	android:name
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:4:7-67
+intent-filter#action:name:android.provider.Telephony.SMS_RECEIVED
+ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:8:7-10:23
+	android:priority
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:8:22-44
+action#android.provider.Telephony.SMS_RECEIVED
+ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:9:9-74
+	android:name
+		ADDED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:9:17-71
+uses-sdk
+INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml
+INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml
