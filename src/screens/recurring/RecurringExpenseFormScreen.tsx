@@ -4,7 +4,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,7 @@ import { Card } from '../../components/Card';
 import { FormScreenContainer } from '../../components/FormScreenContainer';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { CurrencyInput } from '../../components/CurrencyInput';
+import { DateSelectorField } from '../../components/DateSelectorField';
 import { UnsavedChangesModal } from '../../components/UnsavedChangesModal';
 import {
   DELETE_DIALOG_COPY,
@@ -23,31 +23,35 @@ import {
   VALIDATION_COPY,
 } from '../../constants/dialogCopy';
 import {
-  DEDUCTION_DAYS,
-  RECURRING_EXPENSE_CATEGORY_ICONS,
-  RECURRING_EXPENSE_CATEGORY_LABELS,
-  RECURRING_EXPENSE_CATEGORY_TYPES,
   RECURRING_FREQUENCIES,
   RECURRING_FREQUENCY_ICONS,
   RECURRING_FREQUENCY_LABELS,
-  WEEKDAYS,
 } from '../../constants/recurringOptions';
-import { databaseService } from '../../database';
-import { RecurringFrequency } from '../../database/types';
+import { CategoryDuplicateNameError, CategoryDeleteBlockedError, databaseService } from '../../database';
+import { RecurringFrequency, Category } from '../../database/types';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { RecurringStackParamList } from '../../navigation/RecurringStackNavigator';
 import { navigateToOperationSuccess } from '../../navigation/operationSuccess';
 import {
-  ensureRecurringExpenseCategories,
-  RecurringCategoryOption,
+  createRecurringExpenseCategory,
+  clearRecurringCategoryCache,
+  deleteRecurringExpenseCategory,
+  loadRecurringCategories,
 } from '../../services/recurring/recurringCategoryService';
+import { parseCurrencyValue } from '../../utils/currency';
+import { isValidDateString, parseDateString } from '../../utils/dateStrings';
+import { getNextDueDate } from '../../utils/recurringHelpers';
+import { CreateExpenseCategoryModal } from '../../components/InlineCreateModals';
+import {
+  ManageableDropdownField,
+  ManageableDropdownItem,
+} from '../../components/ManageableDropdownField';
 import { useAccountStore } from '../../store/useAccountStore';
 import { useRecurringExpenseStore } from '../../store/useRecurringExpenseStore';
 import { useModalStore } from '../../store/useModalStore';
 import { todayDateString } from '../../store/useTransactionStore';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
-import { parseCurrencyValue } from '../../utils/currency';
 
 type Props = NativeStackScreenProps<RecurringStackParamList, 'RecurringExpenseForm'>;
 
@@ -57,7 +61,7 @@ const EMPTY_FORM = {
   accountId: null as string | null,
   categoryId: null as string | null,
   frequency: 'monthly' as RecurringFrequency,
-  deductionDay: 1,
+  deductionDate: todayDateString(),
   startDate: todayDateString(),
   endDate: '',
   notes: '',
@@ -80,7 +84,7 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
     setAccountId(EMPTY_FORM.accountId);
     setCategoryId(EMPTY_FORM.categoryId);
     setFrequency(EMPTY_FORM.frequency);
-    setDeductionDay(EMPTY_FORM.deductionDay);
+    setDeductionDate(EMPTY_FORM.deductionDate);
     setStartDate(EMPTY_FORM.startDate);
     setEndDate(EMPTY_FORM.endDate);
     setNotes(EMPTY_FORM.notes);
@@ -96,7 +100,7 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
     setAccountId(baseline.accountId);
     setCategoryId(baseline.categoryId);
     setFrequency(baseline.frequency);
-    setDeductionDay(baseline.deductionDay);
+    setDeductionDate(baseline.deductionDate);
     setStartDate(baseline.startDate);
     setEndDate(baseline.endDate);
     setNotes(baseline.notes);
@@ -124,7 +128,7 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
   const [accountId, setAccountId] = useState<string | null>(EMPTY_FORM.accountId);
   const [categoryId, setCategoryId] = useState<string | null>(EMPTY_FORM.categoryId);
   const [frequency, setFrequency] = useState<RecurringFrequency>(EMPTY_FORM.frequency);
-  const [deductionDay, setDeductionDay] = useState(EMPTY_FORM.deductionDay);
+  const [deductionDate, setDeductionDate] = useState(EMPTY_FORM.deductionDate);
   const [startDate, setStartDate] = useState(EMPTY_FORM.startDate);
   const [endDate, setEndDate] = useState(EMPTY_FORM.endDate);
   const [notes, setNotes] = useState(EMPTY_FORM.notes);
@@ -132,32 +136,36 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const [categoryOptions, setCategoryOptions] = useState<RecurringCategoryOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
+  const [createCategoryVisible, setCreateCategoryVisible] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<Category | null>(null);
+  const [categoryDeleteBlockedVisible, setCategoryDeleteBlockedVisible] = useState(false);
 
   useEffect(() => {
     loadAccounts();
   }, [loadAccounts]);
 
+  const refreshCategoryOptions = useCallback(async () => {
+    clearRecurringCategoryCache();
+    const options = await loadRecurringCategories();
+    setCategoryOptions(options);
+    return options;
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshCategoryOptions().catch(console.error);
+    }, [refreshCategoryOptions]),
+  );
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
 
-      async function loadForm() {
-        const options = await ensureRecurringExpenseCategories();
-        if (!active) return;
-
-        setCategoryOptions(options);
-        const defaultCategory =
-          options.find((option) => option.type === 'rent') ?? options[0] ?? null;
-
+      async function loadExpenseForEdit() {
         if (!recurringExpenseId) {
-          const values = {
-            ...EMPTY_FORM,
-            categoryId: defaultCategory?.categoryId ?? null,
-          };
-          baselineRef.current = values;
-          resetForm();
-          setCategoryId(values.categoryId);
           setLoading(false);
           return;
         }
@@ -177,17 +185,18 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
           return;
         }
 
-        const matchedCategory = options.find((option) => option.categoryId === expense.categoryId);
-        const fallbackCategory =
-          options.find((option) => option.type === 'custom') ?? defaultCategory;
+        const options = await loadRecurringCategories();
+        if (!active) return;
+
+        const matchedCategory = options.find((option) => option.id === expense.categoryId);
 
         const values = {
           name: expense.name,
           amount: String(expense.amount),
           accountId: expense.accountId,
-          categoryId: matchedCategory?.categoryId ?? fallbackCategory?.categoryId ?? expense.categoryId,
+          categoryId: matchedCategory?.id ?? expense.categoryId,
           frequency: expense.frequency,
-          deductionDay: expense.deductionDay,
+          deductionDate: getNextDueDate(expense),
           startDate: expense.startDate,
           endDate: expense.endDate ?? '',
           notes: expense.notes ?? '',
@@ -199,7 +208,7 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
         setAccountId(values.accountId);
         setCategoryId(values.categoryId);
         setFrequency(values.frequency);
-        setDeductionDay(values.deductionDay);
+        setDeductionDate(values.deductionDate);
         setStartDate(values.startDate);
         setEndDate(values.endDate);
         setNotes(values.notes);
@@ -207,7 +216,7 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
         setLoading(false);
       }
 
-      loadForm().catch(() => {
+      loadExpenseForEdit().catch(() => {
         if (active) {
           setLoading(false);
           showError(
@@ -220,8 +229,17 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
       return () => {
         active = false;
       };
-    }, [recurringExpenseId, navigation, prepareNavigation, resetForm, showError]),
+    }, [recurringExpenseId, navigation, prepareNavigation, showError]),
   );
+
+  const categoryDropdownItems: ManageableDropdownItem[] = categoryOptions.map((option) => ({
+    id: option.id,
+    value: option.id,
+    label: option.name,
+    icon: option.icon,
+    color: option.color,
+    deletable: true,
+  }));
 
   useEffect(() => {
     if (isEditing || accounts.length === 0) return;
@@ -233,14 +251,72 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
     });
   }, [accounts, isEditing]);
 
+  const handleCreateExpenseCategory = async () => {
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedName) {
+      showError(VALIDATION_COPY.itemNameRequired.title, VALIDATION_COPY.itemNameRequired.message);
+      return;
+    }
+
+    setCreatingCategory(true);
+    try {
+      const created = await createRecurringExpenseCategory({
+        name: trimmedName,
+      });
+      await refreshCategoryOptions();
+      setCategoryId(created.id);
+      setCreateCategoryVisible(false);
+      setNewCategoryName('');
+      touch();
+    } catch (error) {
+      if (error instanceof CategoryDuplicateNameError) {
+        showError(
+          ERROR_COPY.recurringCategoryDuplicate.title,
+          ERROR_COPY.recurringCategoryDuplicate.message,
+        );
+        return;
+      }
+      showError(ERROR_COPY.categorySaveFailed.title, ERROR_COPY.categorySaveFailed.message);
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const handleDeleteCategoryPress = async (item: ManageableDropdownItem) => {
+    const option = categoryOptions.find((entry) => entry.id === item.id);
+    if (!option) return;
+
+    const refs = await databaseService.getCategoryReferenceCounts(option.id);
+    if (refs.transactions > 0 || refs.recurringExpenses > 0 || refs.reviewReferences > 0) {
+      setCategoryDeleteBlockedVisible(true);
+      return;
+    }
+    setDeleteCategoryTarget(option);
+  };
+
+  const handleConfirmDeleteCategory = async () => {
+    if (!deleteCategoryTarget) return;
+
+    try {
+      await deleteRecurringExpenseCategory(deleteCategoryTarget.id);
+      if (categoryId === deleteCategoryTarget.id) {
+        setCategoryId(null);
+      }
+      await refreshCategoryOptions();
+      setDeleteCategoryTarget(null);
+    } catch (error) {
+      if (error instanceof CategoryDeleteBlockedError) {
+        setDeleteCategoryTarget(null);
+        setCategoryDeleteBlockedVisible(true);
+        return;
+      }
+      showError(ERROR_COPY.categoryDeleteFailed.title, ERROR_COPY.categoryDeleteFailed.message);
+    }
+  };
+
   const handleFrequencyChange = (nextFrequency: RecurringFrequency) => {
     touch();
     setFrequency(nextFrequency);
-    if (nextFrequency === 'weekly') {
-      setDeductionDay(1);
-    } else {
-      setDeductionDay(1);
-    }
   };
 
   const handleSave = async () => {
@@ -266,7 +342,15 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
       return;
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
+    if (!isValidDateString(deductionDate)) {
+      showError(
+        VALIDATION_COPY.recurringDeductionDate.title,
+        VALIDATION_COPY.recurringDeductionDate.message,
+      );
+      return;
+    }
+
+    if (!isValidDateString(startDate)) {
       showError(VALIDATION_COPY.recurringStartDate.title, VALIDATION_COPY.recurringStartDate.message);
       return;
     }
@@ -281,6 +365,10 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
       showError(VALIDATION_COPY.recurringEndDate.title, VALIDATION_COPY.recurringEndDate.message);
       return;
     }
+
+    const selectedDate = parseDateString(deductionDate);
+    const deductionDay =
+      frequency === 'weekly' ? selectedDate.getDay() : selectedDate.getDate();
 
     setSaving(true);
     try {
@@ -441,45 +529,22 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
 
               <Card style={styles.section}>
                 <Text style={styles.label}>Expense Category</Text>
-                <View style={styles.categoryGrid}>
-                  {RECURRING_EXPENSE_CATEGORY_TYPES.map((type) => {
-                    const option = categoryOptions.find((item) => item.type === type);
-                    const color = option?.color ?? '#94A3B8';
-                    const selected = option ? categoryId === option.categoryId : false;
-
-                    return (
-                      <Pressable
-                        key={type}
-                        style={[
-                          styles.categoryChip,
-                          selected && {
-                            borderColor: color,
-                            backgroundColor: `${color}15`,
-                          },
-                        ]}
-                        onPress={() => {
-                          if (!option) return;
-                          touch();
-                          setCategoryId(option.categoryId);
-                        }}
-                        disabled={!option}
-                      >
-                        <Text style={styles.optionEmoji}>
-                          {RECURRING_EXPENSE_CATEGORY_ICONS[type]}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.categoryChipText,
-                            selected && { color },
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {RECURRING_EXPENSE_CATEGORY_LABELS[type]}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <ManageableDropdownField
+                  placeholder="Select expense category"
+                  selectedValue={categoryId}
+                  items={categoryDropdownItems}
+                  onSelect={(value) => {
+                    touch();
+                    setCategoryId(value);
+                  }}
+                  onDelete={(item) => {
+                    handleDeleteCategoryPress(item).catch(console.error);
+                  }}
+                  onCreate={() => setCreateCategoryVisible(true)}
+                  createLabel="Create Expense Category"
+                  emptyMessage="No expense categories yet. Create one to continue."
+                  onOpen={touch}
+                />
               </Card>
 
               <Card style={styles.section}>
@@ -512,73 +577,28 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
               </Card>
 
               <Card style={styles.section}>
-                <Text style={styles.label}>
-                  {frequency === 'weekly' ? 'Deduction Day (weekday)' : 'Deduction Date (day of month)'}
-                </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.dayRow}
-                >
-                  {frequency === 'weekly'
-                    ? WEEKDAYS.map((weekday) => {
-                        const selected = deductionDay === weekday.value;
-                        return (
-                          <Pressable
-                            key={weekday.value}
-                            style={[styles.dayChip, selected && styles.dayChipSelected]}
-                            onPress={() => {
-                              touch();
-                              setDeductionDay(weekday.value);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.dayChipText,
-                                selected && styles.dayChipTextSelected,
-                              ]}
-                            >
-                              {weekday.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })
-                    : DEDUCTION_DAYS.map((day) => {
-                        const selected = deductionDay === day;
-                        return (
-                          <Pressable
-                            key={day}
-                            style={[styles.dayChip, selected && styles.dayChipSelected]}
-                            onPress={() => {
-                              touch();
-                              setDeductionDay(day);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.dayChipText,
-                                selected && styles.dayChipTextSelected,
-                              ]}
-                            >
-                              {day}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                </ScrollView>
+                <Text style={styles.label}>Deduction Date</Text>
+                <DateSelectorField
+                  value={deductionDate}
+                  onChange={(value) => {
+                    touch();
+                    setDeductionDate(value);
+                  }}
+                  onPress={touch}
+                  placeholder="Select deduction date"
+                />
               </Card>
 
               <Card style={styles.section}>
                 <Text style={styles.label}>Start Date</Text>
-                <TextInput
-                  style={styles.input}
+                <DateSelectorField
                   value={startDate}
-                  onChangeText={(value) => {
+                  onChange={(value) => {
                     touch();
                     setStartDate(value);
                   }}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textMuted}
+                  onPress={touch}
+                  placeholder="Select start date"
                 />
               </Card>
 
@@ -654,6 +674,39 @@ export function RecurringExpenseFormScreen({ navigation, route }: Props) {
             </>
           )}
       </FormScreenContainer>
+
+      <CreateExpenseCategoryModal
+        visible={createCategoryVisible}
+        name={newCategoryName}
+        onChangeName={setNewCategoryName}
+        onCancel={() => {
+          setCreateCategoryVisible(false);
+          setNewCategoryName('');
+        }}
+        onSubmit={handleCreateExpenseCategory}
+        submitting={creatingCategory}
+      />
+
+      <ConfirmationModal
+        visible={deleteCategoryTarget !== null}
+        title={DELETE_DIALOG_COPY.recurringCategoryInline.title}
+        message={DELETE_DIALOG_COPY.recurringCategoryInline.message()}
+        confirmLabel={DELETE_DIALOG_COPY.recurringCategoryInline.confirmLabel}
+        cancelLabel={DELETE_DIALOG_COPY.recurringCategoryInline.cancelLabel}
+        destructive
+        onConfirm={handleConfirmDeleteCategory}
+        onCancel={() => setDeleteCategoryTarget(null)}
+      />
+
+      <ConfirmationModal
+        visible={categoryDeleteBlockedVisible}
+        title={ERROR_COPY.categoryDeleteBlockedRecurring.title}
+        message={ERROR_COPY.categoryDeleteBlockedRecurring.message}
+        confirmLabel="Got It"
+        singleAction
+        icon="alert-circle-outline"
+        onConfirm={() => setCategoryDeleteBlockedVisible(false)}
+      />
     </>
   );
 }
@@ -702,6 +755,13 @@ const styles = StyleSheet.create({
   },
   optionChipTextSelected: { color: colors.primaryDark },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  emptyState: { gap: spacing.sm, alignItems: 'flex-start' },
+  emptyText: { fontSize: 13, color: colors.textMuted },
+  placeholderText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -721,24 +781,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flexShrink: 1,
   },
-  dayRow: { gap: spacing.xs, paddingVertical: spacing.xs },
-  dayChip: {
-    minWidth: 44,
-    height: 40,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dayChipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
-  },
-  dayChipText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  dayChipTextSelected: { color: colors.primaryDark },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

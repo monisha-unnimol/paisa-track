@@ -1,5 +1,5 @@
 export const DIALOG_ACTIONS = {
-  gotIt: 'Got it',
+  gotIt: 'Got It',
   close: 'Close',
   tryAgain: 'Try Again',
   keepEditing: 'Keep Editing',
@@ -33,9 +33,8 @@ export const VALIDATION_COPY = {
       'The balance must be a number in rupees. Use digits only, such as 5000 or 1250.50.',
   },
   categoryName: {
-    title: 'Category name required',
-    message:
-      'Enter a name for this category — for example, "Food & Dining" or "Transport".',
+    title: 'Name Required',
+    message: 'Please enter a valid name.',
   },
   categoryBudget: {
     title: 'Enter a valid spending limit',
@@ -58,9 +57,8 @@ export const VALIDATION_COPY = {
       'Choose which account this transaction belongs to. Create an account first if you do not have one yet.',
   },
   transactionDate: {
-    title: 'Enter a valid date',
-    message:
-      'Use the format YYYY-MM-DD, such as 2026-06-05, for the transaction date.',
+    title: 'Date Required',
+    message: 'Please select a transaction date.',
   },
   investmentName: {
     title: 'Investment name required',
@@ -70,6 +68,10 @@ export const VALIDATION_COPY = {
   investmentType: {
     title: 'Select an investment type',
     message: 'Choose the type that best describes this investment.',
+  },
+  itemNameRequired: {
+    title: 'Name Required',
+    message: 'Please enter a valid name.',
   },
   investmentAmount: {
     title: 'Enter a valid monthly amount',
@@ -82,12 +84,16 @@ export const VALIDATION_COPY = {
       'Choose the account from which the monthly deduction will be made. Create an account first if needed.',
   },
   investmentDeductionDay: {
-    title: 'Select a deduction date',
-    message: 'Choose a day of the month between 1 and 31 for the automatic deduction.',
+    title: 'Deduction Date Required',
+    message: 'Please select a deduction date.',
+  },
+  recurringDeductionDate: {
+    title: 'Deduction Date Required',
+    message: 'Please select a deduction date.',
   },
   investmentStartDate: {
-    title: 'Enter a valid start date',
-    message: 'Use the format YYYY-MM-DD for when this investment should begin.',
+    title: 'Start Date Required',
+    message: 'Please select a start date.',
   },
   recurringName: {
     title: 'Expense name required',
@@ -110,8 +116,8 @@ export const VALIDATION_COPY = {
       'Choose a category for this recurring expense — for example, Rent, EMI, or Internet.',
   },
   recurringStartDate: {
-    title: 'Enter a valid start date',
-    message: 'Use the format YYYY-MM-DD for when this recurring expense should begin.',
+    title: 'Start Date Required',
+    message: 'Please select a start date.',
   },
   recurringEndDate: {
     title: 'Enter a valid end date',
@@ -154,6 +160,10 @@ export const ERROR_COPY = {
     message:
       'Remove or reassign all transactions linked to this account before deleting it.',
   },
+  accountRequired: {
+    title: 'Account Required',
+    message: 'Please create an account before adding recurring items.',
+  },
   categorySaveFailed: {
     title: 'Unable to Save Category',
     message:
@@ -163,6 +173,22 @@ export const ERROR_COPY = {
     title: 'Duplicate Category Name',
     message:
       'A spending limit with this name already exists. Choose a different name.',
+  },
+  recurringCategoryDuplicate: {
+    title: 'Already Exists',
+    message: 'Please choose another name.',
+  },
+  investmentTypeDuplicate: {
+    title: 'Already Exists',
+    message: 'Please choose another name.',
+  },
+  investmentTypeDeleteBlocked: {
+    title: 'Cannot Delete Investment Type',
+    message: 'This investment type is currently in use.',
+  },
+  categoryDeleteBlockedRecurring: {
+    title: 'Cannot Delete Category',
+    message: 'This category is currently in use.',
   },
   categoryDeleteFailed: {
     title: 'Could not delete category',
@@ -234,6 +260,40 @@ export const ERROR_COPY = {
     message:
       'SMS tracking is not available on this device or build. You can still track expenses manually.',
   },
+  smsTrackingInvalidState: {
+    title: 'SMS Permission Required',
+    message:
+      'SMS tracking was turned off because SMS permission is not granted. Turn the toggle on again to grant access.',
+  },
+} as const;
+
+export const SMS_COPY = {
+  enableExplanation: {
+    title: 'Enable SMS Tracking?',
+    message:
+      'PaisaTrack reads bank transaction SMS on your device to suggest expenses automatically. Messages are not uploaded or shared. You will be asked to grant SMS permission next.',
+    confirmLabel: 'Continue',
+    cancelLabel: 'Cancel',
+  },
+  onboardingEnableExplanation: {
+    title: 'Enable SMS Transaction Detection',
+    message:
+      'PaisaTrack needs SMS access to automatically detect bank transactions and create review requests.',
+    confirmLabel: 'Continue',
+    cancelLabel: 'Cancel',
+  },
+  onboardingPermissionDenied: {
+    title: 'SMS Permission Required',
+    message:
+      'You can still use PaisaTrack without SMS tracking and enable it later from Settings.',
+    continueLabel: 'Continue',
+    retryLabel: 'Retry',
+  },
+  onboardingEnabled: {
+    title: 'SMS Tracking Enabled',
+    message: 'Bank transaction SMS will be detected automatically on this device.',
+    confirmLabel: 'Continue',
+  },
 } as const;
 
 export const DELETE_DIALOG_COPY = {
@@ -282,6 +342,45 @@ export const DELETE_DIALOG_COPY = {
     confirmLabel: 'Delete',
     cancelLabel: 'Cancel',
     message: () => 'This recurring expense will be removed from your tracking records.',
+  },
+  investmentType: {
+    title: 'Delete Investment Type?',
+    confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+    message: () => 'This action cannot be undone.',
+  },
+  recurringCategoryInline: {
+    title: 'Delete Category?',
+    confirmLabel: 'Delete',
+    cancelLabel: 'Cancel',
+    message: () => 'This action cannot be undone.',
+  },
+} as const;
+
+export const DEFAULT_ACCOUNT_COPY = {
+  required: {
+    title: 'Default Account Required',
+    message:
+      'You must always have one default account. Create another account and make it the default before removing this one.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  chooseNew: {
+    title: 'Choose New Default Account',
+    message:
+      'A default account is required. Please select another account to become the default account.',
+  },
+  changeConfirm: {
+    title: 'Change Default Account?',
+    message: (name: string) => `${name} will become the new default account.`,
+    confirmLabel: 'Confirm',
+    cancelLabel: 'Cancel',
+  },
+  makeDefault: {
+    title: 'Make Default Account?',
+    message: (name: string, currentDefaultName: string) =>
+      `${name} will become your default account and replace ${currentDefaultName}.`,
+    confirmLabel: 'Confirm',
+    cancelLabel: 'Cancel',
   },
 } as const;
 

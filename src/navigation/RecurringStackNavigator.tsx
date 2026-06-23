@@ -4,7 +4,6 @@ import { useNavigation } from '@react-navigation/native';
 import { InvestmentFormScreen } from '../screens/investments/InvestmentFormScreen';
 import { RecurringExpenseFormScreen } from '../screens/recurring/RecurringExpenseFormScreen';
 import { RecurringListScreen } from '../screens/recurring/RecurringListScreen';
-import { RecurringTypeSelectScreen } from '../screens/recurring/RecurringTypeSelectScreen';
 import { OperationSuccessScreen } from '../screens/shared/OperationSuccessScreen';
 import { useTabStackResetOnBlur } from '../hooks/useTabStackResetOnBlur';
 import { OperationSuccessParams } from '../navigation/operationSuccess';
@@ -12,7 +11,6 @@ import { formScreenOptions, stackScreenOptions, successScreenOptions } from './s
 
 export type RecurringStackParamList = {
   RecurringList: undefined;
-  RecurringTypeSelect: undefined;
   InvestmentForm: { investmentId?: string };
   RecurringExpenseForm: { recurringExpenseId?: string };
   OperationSuccess: OperationSuccessParams;
@@ -34,14 +32,6 @@ function RecurringStackNavigatorInner() {
         name="RecurringList"
         component={RecurringListScreen}
         options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="RecurringTypeSelect"
-        component={RecurringTypeSelectScreen}
-        options={{
-          ...formScreenOptions,
-          title: 'Add Recurring Item',
-        }}
       />
       <Stack.Screen
         name="InvestmentForm"

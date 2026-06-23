@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   disableSmsTracking,
   enableSmsTracking,
+  reconcileSmsTrackingState,
 } from '../services/sms/smsTrackingService';
 
 const SMS_AUTO_TRACKING_KEY = '@paisatrack/smsAutoTrackingEnabled';
@@ -10,7 +11,9 @@ const SMS_AUTO_TRACKING_KEY = '@paisatrack/smsAutoTrackingEnabled';
 type SettingsStore = {
   smsAutoTrackingEnabled: boolean;
   hydrated: boolean;
-  loadSettings: () => Promise<void>;
+  smsInvalidStateDetected: boolean;
+  clearSmsInvalidState: () => void;
+  loadSettings: () => Promise<'ok' | 'disabled_invalid'>;
   setSmsAutoTrackingEnabled: (
     enabled: boolean,
   ) => Promise<'enabled' | 'disabled' | 'denied' | 'blocked' | 'unavailable'>;
@@ -32,10 +35,18 @@ async function writeSmsAutoTrackingFlag(enabled: boolean): Promise<void> {
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   smsAutoTrackingEnabled: false,
   hydrated: false,
+  smsInvalidStateDetected: false,
+
+  clearSmsInvalidState: () => set({ smsInvalidStateDetected: false }),
 
   loadSettings: async () => {
     const smsAutoTrackingEnabled = await readSmsAutoTrackingFlag();
     set({ smsAutoTrackingEnabled, hydrated: true });
+    const reconcileResult = await reconcileSmsTrackingState();
+    if (reconcileResult === 'disabled_invalid') {
+      set({ smsAutoTrackingEnabled: false, smsInvalidStateDetected: true });
+    }
+    return reconcileResult;
   },
 
   setSmsAutoTrackingEnabled: async (enabled) => {

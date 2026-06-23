@@ -4,10 +4,12 @@ import {
   AccountRow,
   CategoryRow,
   InvestmentRow,
+  InvestmentTypeRow,
   InvestmentWithDetailsRow,
   mapAccountRow,
   mapCategoryRow,
   mapInvestmentRow,
+  mapInvestmentTypeRow,
   mapRecurringExpenseRow,
   mapReviewRequestRow,
   mapTransactionRow,
@@ -25,10 +27,12 @@ import {
   CreateAccountInput,
   CreateCategoryInput,
   CreateInvestmentInput,
+  CreateInvestmentTypeInput,
   CreateRecurringExpenseInput,
   CreateReviewRequestInput,
   CreateTransactionInput,
   Investment,
+  InvestmentTypeDefinition,
   RecurringExpense,
   ReviewRequest,
   ReviewRequestStatus,
@@ -48,13 +52,27 @@ import {
   CategoryDuplicateNameError,
   CategoryNotFoundError,
   CategorySaveError,
+  InvestmentTypeDuplicateNameError,
+  InvestmentTypeSaveError,
+  InvestmentTypeDeleteBlockedError,
+  InvestmentTypeNotFoundError,
 } from './errors';
+import { slugifyName } from '../utils/slugify';
+import {
+  INVESTMENT_TYPE_COLORS,
+  INVESTMENT_TYPE_ICONS,
+  INVESTMENT_TYPE_LABELS,
+} from '../constants/investmentOptions';
 
 export {
   CategoryDeleteBlockedError,
   CategoryDuplicateNameError,
   CategoryNotFoundError,
   CategorySaveError,
+  InvestmentTypeDuplicateNameError,
+  InvestmentTypeSaveError,
+  InvestmentTypeDeleteBlockedError,
+  InvestmentTypeNotFoundError,
 } from './errors';
 
 const DEFAULT_PROFILE_ID = 'default';
@@ -350,7 +368,7 @@ class DatabaseService {
 
   async getCategoryReferenceCounts(
     categoryId: string,
-  ): Promise<{ transactions: number; recurringExpenses: number }> {
+  ): Promise<{ transactions: number; recurringExpenses: number; reviewReferences: number }> {
     const db = await this.getDb();
     const transactionRow = await db.getFirstAsync<{ count: number }>(
       'SELECT COUNT(*) AS count FROM transactions WHERE category_id = ?',
@@ -368,15 +386,31 @@ class DatabaseService {
       recurringExpenses = 0;
     }
 
+    const pendingReviews = await db.getAllAsync<{ review_data: string }>(
+      "SELECT review_data FROM review_requests WHERE status = 'pending'",
+    );
+    let reviewReferences = 0;
+    for (const review of pendingReviews) {
+      try {
+        const data = JSON.parse(review.review_data) as { categoryId?: string };
+        if (data.categoryId === categoryId) {
+          reviewReferences += 1;
+        }
+      } catch {
+        // Ignore malformed review payloads.
+      }
+    }
+
     return {
       transactions: transactionRow?.count ?? 0,
       recurringExpenses,
+      reviewReferences,
     };
   }
 
   async deleteCategory(id: string): Promise<boolean> {
     const refs = await this.getCategoryReferenceCounts(id);
-    if (refs.transactions > 0 || refs.recurringExpenses > 0) {
+    if (refs.transactions > 0 || refs.recurringExpenses > 0 || refs.reviewReferences > 0) {
       throw new CategoryDeleteBlockedError();
     }
 
@@ -568,6 +602,113 @@ class DatabaseService {
     });
 
     return true;
+  }
+
+  // ─── Investment Types ─────────────────────────────────────────────────────
+
+  async getInvestmentTypes(): Promise<InvestmentTypeDefinition[]> {
+    const db = await this.getDb();
+    const rows = await db.getAllAsync<InvestmentTypeRow>(
+      'SELECT * FROM investment_types ORDER BY is_builtin DESC, name ASC',
+    );
+    return rows.map(mapInvestmentTypeRow);
+  }
+
+  async getInvestmentTypeByName(name: string): Promise<InvestmentTypeDefinition | null> {
+    const db = await this.getDb();
+    const row = await db.getFirstAsync<InvestmentTypeRow>(
+      'SELECT * FROM investment_types WHERE name = ? COLLATE NOCASE',
+      name.trim(),
+    );
+    return row ? mapInvestmentTypeRow(row) : null;
+  }
+
+  async createInvestmentType(input: CreateInvestmentTypeInput): Promise<InvestmentTypeDefinition> {
+    const trimmedName = input.name.trim();
+    const existing = await this.getInvestmentTypeByName(trimmedName);
+    if (existing) {
+      throw new InvestmentTypeDuplicateNameError();
+    }
+
+    const normalized = trimmedName.toLowerCase();
+    const builtinDuplicate = Object.values(INVESTMENT_TYPE_LABELS).some(
+      (label) => label.toLowerCase() === normalized,
+    );
+    if (builtinDuplicate) {
+      throw new InvestmentTypeDuplicateNameError();
+    }
+
+    let slug = slugifyName(trimmedName);
+    const db = await this.getDb();
+    let suffix = 1;
+    while (await db.getFirstAsync('SELECT id FROM investment_types WHERE slug = ?', slug)) {
+      slug = `${slugifyName(trimmedName)}_${suffix}`;
+      suffix += 1;
+    }
+
+    const timestamp = nowIso();
+    const definition: InvestmentTypeDefinition = {
+      id: createId(),
+      slug,
+      name: trimmedName,
+      icon: input.icon ?? INVESTMENT_TYPE_ICONS.custom,
+      color: input.color ?? INVESTMENT_TYPE_COLORS.custom,
+      isBuiltin: false,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    try {
+      await db.runAsync(
+        `INSERT INTO investment_types (id, slug, name, icon, color, is_builtin, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+        definition.id,
+        definition.slug,
+        definition.name,
+        definition.icon,
+        definition.color,
+        definition.createdAt,
+        definition.updatedAt,
+      );
+    } catch (error) {
+      throw new InvestmentTypeSaveError(error);
+    }
+
+    return definition;
+  }
+
+  async getInvestmentTypeById(id: string): Promise<InvestmentTypeDefinition | null> {
+    const db = await this.getDb();
+    const row = await db.getFirstAsync<InvestmentTypeRow>(
+      'SELECT * FROM investment_types WHERE id = ?',
+      id,
+    );
+    return row ? mapInvestmentTypeRow(row) : null;
+  }
+
+  async getInvestmentTypeUsageCount(slug: string): Promise<number> {
+    const db = await this.getDb();
+    const row = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM investments WHERE type = ?',
+      slug,
+    );
+    return row?.count ?? 0;
+  }
+
+  async deleteInvestmentType(id: string): Promise<boolean> {
+    const definition = await this.getInvestmentTypeById(id);
+    if (!definition) {
+      throw new InvestmentTypeNotFoundError();
+    }
+
+    const usageCount = await this.getInvestmentTypeUsageCount(definition.slug);
+    if (usageCount > 0) {
+      throw new InvestmentTypeDeleteBlockedError();
+    }
+
+    const db = await this.getDb();
+    const result = await db.runAsync('DELETE FROM investment_types WHERE id = ?', id);
+    return (result.changes ?? 0) > 0;
   }
 
   // ─── Investments ──────────────────────────────────────────────────────────
@@ -900,6 +1041,10 @@ class DatabaseService {
 
     const row = await db.getFirstAsync<CategoryRow>(sql, ...params);
     return row ? mapCategoryRow(row) : null;
+  }
+
+  async getCategoriesByScope(scope: 'spending' | 'recurring'): Promise<Category[]> {
+    return this.searchCategories('', null, scope);
   }
 
   async getUserProfile(): Promise<UserProfile | null> {

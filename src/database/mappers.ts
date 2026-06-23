@@ -5,6 +5,7 @@ import {
   CategoryScope,
   Investment,
   InvestmentType,
+  InvestmentTypeDefinition,
   RecurringExpense,
   RecurringFrequency,
   ReviewRequest,
@@ -158,6 +159,30 @@ export type InvestmentRow = {
   created_at: string;
   updated_at: string;
 };
+
+export type InvestmentTypeRow = {
+  id: string;
+  slug: string;
+  name: string;
+  icon: string;
+  color: string;
+  is_builtin: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export function mapInvestmentTypeRow(row: InvestmentTypeRow): InvestmentTypeDefinition {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    icon: row.icon,
+    color: row.color,
+    isBuiltin: row.is_builtin === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 export type InvestmentWithDetailsRow = InvestmentRow & {
   account_name: string;

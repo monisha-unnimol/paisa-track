@@ -1,5 +1,6 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import {
   AccountFormFields,
@@ -14,11 +15,12 @@ import {
 import { OnboardingHeader } from '../../components/OnboardingHeader';
 import { OnboardingScreen } from '../../components/OnboardingScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { ERROR_COPY, SUCCESS_COPY, VALIDATION_COPY } from '../../constants/dialogCopy';
-import { AccountType } from '../../database/types';
+import { ERROR_COPY, VALIDATION_COPY } from '../../constants/dialogCopy';
+import { Account, AccountType } from '../../database/types';
+import { databaseService } from '../../database';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { navigateToOperationSuccess } from '../../navigation/operationSuccess';
 import { useAccountStore } from '../../store/useAccountStore';
+import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { useModalStore } from '../../store/useModalStore';
 import { spacing } from '../../theme/spacing';
 import { parseCurrencyValue } from '../../utils/currency';
@@ -42,19 +44,57 @@ const INITIAL_FORM: AccountFormValues = {
   isDefault: true,
 };
 
+function accountToFormValues(account: Account): AccountFormValues {
+  return {
+    name: account.name,
+    type: account.type,
+    balance: String(account.balance),
+    icon: account.icon,
+    color: account.color,
+    isDefault: account.isDefault,
+  };
+}
+
+function formsMatch(
+  left: AccountFormValues,
+  right: AccountFormValues,
+  leftBalance: number,
+  rightBalance: number,
+): boolean {
+  return (
+    left.name.trim() === right.name.trim() &&
+    left.type === right.type &&
+    left.icon === right.icon &&
+    left.color === right.color &&
+    leftBalance === rightBalance
+  );
+}
+
 export function FirstAccountSetupScreen(props: Props) {
   const mode = props.mode ?? props.route?.params?.mode ?? 'onboarding';
   const navigation = props.navigation;
   const addAccount = useAccountStore((state) => state.addAccount);
+  const editAccount = useAccountStore((state) => state.editAccount);
   const showError = useModalStore((state) => state.showError);
+  const {
+    onboardingAccountId,
+    onboardingAccountCreated,
+    hydrated: onboardingHydrated,
+    hydrate: hydrateOnboarding,
+    setOnboardingAccount,
+  } = useOnboardingStore();
 
   const [form, setForm] = useState<AccountFormValues>(INITIAL_FORM);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingAccount, setLoadingAccount] = useState(mode === 'onboarding');
+  const baselineRef = useRef<AccountFormValues>(INITIAL_FORM);
+
+  const isEditMode = mode === 'onboarding' && onboardingAccountCreated && Boolean(onboardingAccountId);
 
   const parsedBalance = useMemo(() => parseCurrencyValue(form.balance), [form.balance]);
   const hasValidBalance = form.balance.trim() !== '' && !Number.isNaN(parsedBalance);
-  const canContinue = form.name.trim().length > 0 && hasValidBalance && !saving;
+  const canContinue = form.name.trim().length > 0 && hasValidBalance && !saving && !loadingAccount;
 
   const updateForm = (patch: Partial<AccountFormValues>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -84,6 +124,50 @@ export function FirstAccountSetupScreen(props: Props) {
     updateForm({ type: nextType });
   };
 
+  const loadOnboardingAccount = useCallback(async () => {
+    if (mode !== 'onboarding') {
+      setLoadingAccount(false);
+      return;
+    }
+
+    if (!onboardingHydrated) {
+      await hydrateOnboarding();
+    }
+
+    const accountId = useOnboardingStore.getState().onboardingAccountId;
+    const accountCreated = useOnboardingStore.getState().onboardingAccountCreated;
+
+    if (!accountCreated || !accountId) {
+      setLoadingAccount(false);
+      return;
+    }
+
+    setLoadingAccount(true);
+    try {
+      const account = await databaseService.getAccountById(accountId);
+      if (!account) {
+        setLoadingAccount(false);
+        return;
+      }
+
+      const values = accountToFormValues(account);
+      baselineRef.current = values;
+      setForm(values);
+    } finally {
+      setLoadingAccount(false);
+    }
+  }, [hydrateOnboarding, mode, onboardingHydrated]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOnboardingAccount().catch(console.error);
+    }, [loadOnboardingAccount]),
+  );
+
+  const continueOnboarding = () => {
+    navigation?.navigate('SmsTrackingSetup');
+  };
+
   const handleContinue = async () => {
     const trimmedName = form.name.trim();
     if (!trimmedName) {
@@ -106,7 +190,44 @@ export function FirstAccountSetupScreen(props: Props) {
 
     setSaving(true);
     try {
-      await addAccount({
+      if (mode === 'onboarding' && isEditMode && onboardingAccountId) {
+        const baselineBalance = parseCurrencyValue(baselineRef.current.balance);
+        const unchanged = formsMatch(form, baselineRef.current, parsedBalance, baselineBalance);
+
+        if (unchanged) {
+          continueOnboarding();
+          return;
+        }
+
+        const updated = await editAccount(onboardingAccountId, {
+          name: trimmedName,
+          type: form.type,
+          balance: parsedBalance,
+          icon: form.icon,
+          color: form.color,
+          isDefault: true,
+        });
+
+        if (!updated) {
+          showError(
+            ERROR_COPY.accountSaveFailed.title,
+            ERROR_COPY.accountSaveFailed.message,
+          );
+          return;
+        }
+
+        baselineRef.current = accountToFormValues(updated);
+        setForm(baselineRef.current);
+        continueOnboarding();
+        return;
+      }
+
+      if (mode === 'onboarding' && onboardingAccountCreated && onboardingAccountId) {
+        continueOnboarding();
+        return;
+      }
+
+      const account = await addAccount({
         name: trimmedName,
         type: form.type,
         balance: parsedBalance,
@@ -115,14 +236,10 @@ export function FirstAccountSetupScreen(props: Props) {
         isDefault: true,
       });
 
-      if (mode === 'onboarding' && navigation) {
-        navigateToOperationSuccess(navigation, {
-          title: SUCCESS_COPY.firstAccountCreated.title,
-          message: SUCCESS_COPY.firstAccountCreated.message,
-          listRoute: 'Coachmarks',
-        });
-        return;
-      }
+      baselineRef.current = accountToFormValues(account);
+      setForm(baselineRef.current);
+      await setOnboardingAccount(account.id);
+      continueOnboarding();
     } catch {
       showError(
         ERROR_COPY.accountSaveFailed.title,
@@ -133,17 +250,21 @@ export function FirstAccountSetupScreen(props: Props) {
     }
   };
 
+  const primaryLabel = isEditMode ? 'Update Account' : 'Save Account';
+
   return (
     <OnboardingScreen
       useStackHeaderOffset={mode === 'onboarding'}
       contentContainerStyle={styles.content}
       footer={
         <PrimaryButton
-          label="Continue"
+          label={primaryLabel}
           onPress={handleContinue}
           disabled={!canContinue}
-          loading={saving}
-          accessibilityLabel="Create account and continue"
+          loading={saving || loadingAccount}
+          accessibilityLabel={
+            isEditMode ? 'Update account and continue' : 'Save account and continue'
+          }
           compact
         />
       }

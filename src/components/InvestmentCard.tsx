@@ -1,9 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  INVESTMENT_TYPE_COLORS,
-  INVESTMENT_TYPE_ICONS,
-  INVESTMENT_TYPE_LABELS,
+  resolveInvestmentTypeDisplay,
 } from '../constants/investmentOptions';
 import { InvestmentWithDetails } from '../database/types';
 import { formatCurrency } from '../utils/currency';
@@ -27,7 +25,8 @@ function formatDisplayDate(dateStr: string): string {
 }
 
 export function InvestmentCard({ investment, onPress, onDelete }: InvestmentCardProps) {
-  const typeColor = INVESTMENT_TYPE_COLORS[investment.type];
+  const typeDisplay = resolveInvestmentTypeDisplay(investment.type);
+  const typeColor = typeDisplay.color;
   const isProcessed = investment.status === 'processed';
 
   return (
@@ -38,14 +37,14 @@ export function InvestmentCard({ investment, onPress, onDelete }: InvestmentCard
         <View style={styles.content}>
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: `${typeColor}18` }]}>
-              <Text style={styles.icon}>{INVESTMENT_TYPE_ICONS[investment.type]}</Text>
+              <Text style={styles.icon}>{typeDisplay.icon}</Text>
             </View>
 
             <View style={styles.info}>
               <Text style={styles.name} numberOfLines={1}>
                 {investment.name}
               </Text>
-              <Text style={styles.type}>{INVESTMENT_TYPE_LABELS[investment.type]}</Text>
+              <Text style={styles.type}>{typeDisplay.label}</Text>
             </View>
 
             {onDelete && (

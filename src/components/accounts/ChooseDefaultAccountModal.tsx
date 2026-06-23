@@ -9,6 +9,8 @@ type ChooseDefaultAccountModalProps = {
   visible: boolean;
   accounts: Account[];
   excludeAccountId: string;
+  title?: string;
+  message?: string;
   onSelect: (accountId: string) => void;
   onCancel: () => void;
 };
@@ -17,6 +19,8 @@ export function ChooseDefaultAccountModal({
   visible,
   accounts,
   excludeAccountId,
+  title = 'Choose Default Account',
+  message = 'Select which account should become your default.',
   onSelect,
   onCancel,
 }: ChooseDefaultAccountModalProps) {
@@ -27,10 +31,8 @@ export function ChooseDefaultAccountModal({
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View style={styles.sheet}>
-          <Text style={formStyles.screenTitle}>Choose Default Account</Text>
-          <Text style={[formStyles.screenSubtitle, styles.subtitle]}>
-            Select which account should become your default.
-          </Text>
+          <Text style={formStyles.screenTitle}>{title}</Text>
+          <Text style={[formStyles.screenSubtitle, styles.subtitle]}>{message}</Text>
 
           <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
             {options.map((account) => (

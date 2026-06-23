@@ -39,7 +39,7 @@ export function ErrorModal({
       visible={visible}
       title={title}
       message={message}
-      confirmLabel={DIALOG_ACTIONS.close}
+      confirmLabel={DIALOG_ACTIONS.gotIt}
       singleAction
       icon="alert-circle-outline"
       onConfirm={onDismiss}

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { AddRecurringFab, RecurringItemType } from '../../components/AddRecurringFab';
 import { Card } from '../../components/Card';
 import { RecurringItemCard } from '../../components/RecurringItemCard';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -69,13 +70,15 @@ export function RecurringListScreen({ navigation }: Props) {
     loadRecurringExpenses,
     removeRecurringExpense,
   } = useRecurringExpenseStore();
-  const { loadAccounts } = useAccountStore();
+  const { loadAccounts, accounts } = useAccountStore();
   const { loadCategories } = useCategoryStore();
   const showError = useModalStore((state) => state.showError);
 
   const [segment, setSegment] = useState<RecurringSegment>('all');
   const [searchText, setSearchText] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [selectorVisible, setSelectorVisible] = useState(false);
+  const [accountRequiredVisible, setAccountRequiredVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -124,19 +127,43 @@ export function RecurringListScreen({ navigation }: Props) {
     searchText.trim().length > 0 && items.length === 0 && !showInitialLoading;
   const showSummary = items.length > 0;
 
+  const navigateToRecurringForm = (type: RecurringItemType) => {
+    if (type === 'investment') {
+      navigation.navigate('InvestmentForm', {});
+      return;
+    }
+    navigation.navigate('RecurringExpenseForm', {});
+  };
+
+  const openAddSelector = () => {
+    if (accounts.length === 0) {
+      setAccountRequiredVisible(true);
+      return;
+    }
+    setSelectorVisible(true);
+  };
+
+  const handleSelectRecurringType = (type: RecurringItemType) => {
+    if (accounts.length === 0) {
+      setAccountRequiredVisible(true);
+      return;
+    }
+    navigateToRecurringForm(type);
+  };
+
   const handleEmptyAction = () => {
     switch (emptyState.action) {
       case 'clear_search':
         setSearchText('');
         break;
       case 'add_investment':
-        navigation.navigate('InvestmentForm', {});
+        handleSelectRecurringType('investment');
         break;
       case 'add_expense':
-        navigation.navigate('RecurringExpenseForm', {});
+        handleSelectRecurringType('expense');
         break;
       default:
-        navigation.navigate('RecurringTypeSelect');
+        openAddSelector();
         break;
     }
   };
@@ -189,6 +216,23 @@ export function RecurringListScreen({ navigation }: Props) {
 
   return (
     <>
+      <ConfirmationModal
+        visible={accountRequiredVisible}
+        title={ERROR_COPY.accountRequired.title}
+        message={ERROR_COPY.accountRequired.message}
+        confirmLabel="Create Account"
+        cancelLabel="Cancel"
+        icon="wallet-outline"
+        onConfirm={() => {
+          setAccountRequiredVisible(false);
+          navigation.getParent()?.navigate('Accounts', {
+            screen: 'AccountForm',
+            params: {},
+          });
+        }}
+        onCancel={() => setAccountRequiredVisible(false)}
+      />
+
       <ConfirmationModal
         visible={deleteTarget !== null}
         title={
@@ -330,7 +374,7 @@ export function RecurringListScreen({ navigation }: Props) {
                       styles.emptyQuickAction,
                       pressed && styles.emptyButtonPressed,
                     ]}
-                    onPress={() => navigation.navigate('InvestmentForm', {})}
+                    onPress={() => handleSelectRecurringType('investment')}
                   >
                     <Ionicons name="trending-up-outline" size={18} color={colors.income} />
                     <Text style={styles.emptyQuickActionText}>Investment</Text>
@@ -340,7 +384,7 @@ export function RecurringListScreen({ navigation }: Props) {
                       styles.emptyQuickAction,
                       pressed && styles.emptyButtonPressed,
                     ]}
-                    onPress={() => navigation.navigate('RecurringExpenseForm', {})}
+                    onPress={() => handleSelectRecurringType('expense')}
                   >
                     <Ionicons name="receipt-outline" size={18} color={colors.expense} />
                     <Text style={styles.emptyQuickActionText}>Expense</Text>
@@ -376,13 +420,12 @@ export function RecurringListScreen({ navigation }: Props) {
           )}
         </ScreenContainer>
 
-        <Pressable
-          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-          onPress={() => navigation.navigate('RecurringTypeSelect')}
-          accessibilityLabel="Add Recurring Item"
-        >
-          <Ionicons name="add" size={28} color="#FFFFFF" />
-        </Pressable>
+        <AddRecurringFab
+          selectorVisible={selectorVisible}
+          onSelectorVisibleChange={setSelectorVisible}
+          onFabPress={openAddSelector}
+          onSelectType={handleSelectRecurringType}
+        />
       </View>
     </>
   );
@@ -534,21 +577,4 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   list: { gap: spacing.md },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  fabPressed: { opacity: 0.9, transform: [{ scale: 0.96 }] },
 });

@@ -4,7 +4,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,7 @@ import { Card } from '../../components/Card';
 import { FormScreenContainer } from '../../components/FormScreenContainer';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { CurrencyInput } from '../../components/CurrencyInput';
+import { DateSelectorField } from '../../components/DateSelectorField';
 import { UnsavedChangesModal } from '../../components/UnsavedChangesModal';
 import {
   DELETE_DIALOG_COPY,
@@ -22,15 +22,9 @@ import {
   SUCCESS_COPY,
   VALIDATION_COPY,
 } from '../../constants/dialogCopy';
-import {
-  DEDUCTION_DAYS,
-  INVESTMENT_TYPE_COLORS,
-  INVESTMENT_TYPE_ICONS,
-  INVESTMENT_TYPE_LABELS,
-  INVESTMENT_TYPES,
-} from '../../constants/investmentOptions';
 import { databaseService } from '../../database';
-import { InvestmentType } from '../../database/types';
+import { InvestmentType, InvestmentTypeDefinition } from '../../database/types';
+import { InvestmentTypeDuplicateNameError, InvestmentTypeDeleteBlockedError } from '../../database';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { RecurringStackParamList } from '../../navigation/RecurringStackNavigator';
 import { navigateToOperationSuccess } from '../../navigation/operationSuccess';
@@ -41,15 +35,29 @@ import { todayDateString } from '../../store/useTransactionStore';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { parseCurrencyValue } from '../../utils/currency';
+import { isValidDateString, parseDateString } from '../../utils/dateStrings';
+import { getNextDeductionDate } from '../../utils/investmentHelpers';
+import {
+  clearInvestmentTypeCache,
+  createInvestmentType,
+  deleteInvestmentType,
+  loadInvestmentTypeOptions,
+  loadUserInvestmentTypes,
+} from '../../services/investments/investmentTypeService';
+import { CreateInvestmentTypeModal } from '../../components/InlineCreateModals';
+import {
+  ManageableDropdownField,
+  ManageableDropdownItem,
+} from '../../components/ManageableDropdownField';
 
 type Props = NativeStackScreenProps<RecurringStackParamList, 'InvestmentForm'>;
 
 const EMPTY_FORM = {
   name: '',
-  type: 'sip' as InvestmentType,
+  type: null as InvestmentType | null,
   amount: '',
   accountId: null as string | null,
-  deductionDay: 1,
+  deductionDate: todayDateString(),
   startDate: todayDateString(),
   notes: '',
   isActive: true,
@@ -69,7 +77,7 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
     setType(EMPTY_FORM.type);
     setAmount(EMPTY_FORM.amount);
     setAccountId(EMPTY_FORM.accountId);
-    setDeductionDay(EMPTY_FORM.deductionDay);
+    setDeductionDate(EMPTY_FORM.deductionDate);
     setStartDate(EMPTY_FORM.startDate);
     setNotes(EMPTY_FORM.notes);
     setIsActive(EMPTY_FORM.isActive);
@@ -83,7 +91,7 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
     setType(baseline.type);
     setAmount(baseline.amount);
     setAccountId(baseline.accountId);
-    setDeductionDay(baseline.deductionDay);
+    setDeductionDate(baseline.deductionDate);
     setStartDate(baseline.startDate);
     setNotes(baseline.notes);
     setIsActive(baseline.isActive);
@@ -106,20 +114,130 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
   useEffect(() => () => clearFormState(), [clearFormState]);
 
   const [name, setName] = useState(EMPTY_FORM.name);
-  const [type, setType] = useState<InvestmentType>(EMPTY_FORM.type);
+  const [type, setType] = useState<InvestmentType | null>(EMPTY_FORM.type);
   const [amount, setAmount] = useState(EMPTY_FORM.amount);
   const [accountId, setAccountId] = useState<string | null>(EMPTY_FORM.accountId);
-  const [deductionDay, setDeductionDay] = useState(EMPTY_FORM.deductionDay);
+  const [deductionDate, setDeductionDate] = useState(EMPTY_FORM.deductionDate);
   const [startDate, setStartDate] = useState(EMPTY_FORM.startDate);
   const [notes, setNotes] = useState(EMPTY_FORM.notes);
   const [isActive, setIsActive] = useState(EMPTY_FORM.isActive);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEditing);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [typeOptions, setTypeOptions] = useState<InvestmentTypeDefinition[]>([]);
+  const [allTypeOptions, setAllTypeOptions] = useState<InvestmentTypeDefinition[]>([]);
+  const [createTypeVisible, setCreateTypeVisible] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [creatingType, setCreatingType] = useState(false);
+  const [deleteTypeTarget, setDeleteTypeTarget] = useState<InvestmentTypeDefinition | null>(null);
+  const [typeDeleteBlockedVisible, setTypeDeleteBlockedVisible] = useState(false);
 
   useEffect(() => {
     loadAccounts();
   }, [loadAccounts]);
+
+  const refreshTypeOptions = useCallback(async () => {
+    clearInvestmentTypeCache();
+    const all = await loadInvestmentTypeOptions();
+    const userTypes = await loadUserInvestmentTypes();
+    setAllTypeOptions(all);
+    setTypeOptions(userTypes);
+    return userTypes;
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshTypeOptions().catch(console.error);
+    }, [refreshTypeOptions]),
+  );
+
+  const investmentTypeDropdownItems: ManageableDropdownItem[] = (() => {
+    const items = typeOptions.map((option) => ({
+      id: option.id,
+      value: option.slug,
+      label: option.name,
+      icon: option.icon,
+      color: option.color,
+      deletable: true,
+    }));
+
+    if (type && !typeOptions.some((option) => option.slug === type)) {
+      const legacy = allTypeOptions.find((option) => option.slug === type);
+      if (legacy) {
+        items.unshift({
+          id: legacy.id,
+          value: legacy.slug,
+          label: legacy.name,
+          icon: legacy.icon,
+          color: legacy.color,
+          deletable: false,
+        });
+      }
+    }
+
+    return items;
+  })();
+
+  const handleCreateInvestmentType = async () => {
+    const trimmedName = newTypeName.trim();
+    if (!trimmedName) {
+      showError(VALIDATION_COPY.itemNameRequired.title, VALIDATION_COPY.itemNameRequired.message);
+      return;
+    }
+
+    setCreatingType(true);
+    try {
+      const created = await createInvestmentType({ name: trimmedName });
+      await refreshTypeOptions();
+      setType(created.slug);
+      setCreateTypeVisible(false);
+      setNewTypeName('');
+      touch();
+    } catch (error) {
+      if (error instanceof InvestmentTypeDuplicateNameError) {
+        showError(
+          ERROR_COPY.investmentTypeDuplicate.title,
+          ERROR_COPY.investmentTypeDuplicate.message,
+        );
+        return;
+      }
+      showError(ERROR_COPY.investmentSaveFailed.title, ERROR_COPY.investmentSaveFailed.message);
+    } finally {
+      setCreatingType(false);
+    }
+  };
+
+  const handleDeleteTypePress = async (item: ManageableDropdownItem) => {
+    const option = allTypeOptions.find((entry) => entry.id === item.id);
+    if (!option) return;
+
+    const usageCount = await databaseService.getInvestmentTypeUsageCount(option.slug);
+    if (usageCount > 0) {
+      setTypeDeleteBlockedVisible(true);
+      return;
+    }
+    setDeleteTypeTarget(option);
+  };
+
+  const handleConfirmDeleteType = async () => {
+    if (!deleteTypeTarget) return;
+
+    try {
+      await deleteInvestmentType(deleteTypeTarget.id);
+      if (type === deleteTypeTarget.slug) {
+        setType(null);
+      }
+      await refreshTypeOptions();
+      setDeleteTypeTarget(null);
+    } catch (error) {
+      if (error instanceof InvestmentTypeDeleteBlockedError) {
+        setDeleteTypeTarget(null);
+        setTypeDeleteBlockedVisible(true);
+        return;
+      }
+      showError(ERROR_COPY.investmentSaveFailed.title, ERROR_COPY.investmentSaveFailed.message);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -150,7 +268,7 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
           type: investment.type,
           amount: String(investment.amount),
           accountId: investment.accountId,
-          deductionDay: investment.deductionDay,
+          deductionDate: getNextDeductionDate(investment.deductionDay),
           startDate: investment.startDate,
           notes: investment.notes ?? '',
           isActive: investment.isActive,
@@ -160,7 +278,7 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
         setType(values.type);
         setAmount(values.amount);
         setAccountId(values.accountId);
-        setDeductionDay(values.deductionDay);
+        setDeductionDate(values.deductionDate);
         setStartDate(values.startDate);
         setNotes(values.notes);
         setIsActive(values.isActive);
@@ -208,10 +326,25 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
       return;
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
+    if (!type) {
+      showError(VALIDATION_COPY.investmentType.title, VALIDATION_COPY.investmentType.message);
+      return;
+    }
+
+    if (!isValidDateString(deductionDate)) {
+      showError(
+        VALIDATION_COPY.investmentDeductionDay.title,
+        VALIDATION_COPY.investmentDeductionDay.message,
+      );
+      return;
+    }
+
+    if (!isValidDateString(startDate)) {
       showError(VALIDATION_COPY.investmentStartDate.title, VALIDATION_COPY.investmentStartDate.message);
       return;
     }
+
+    const deductionDay = parseDateString(deductionDate).getDate();
 
     setSaving(true);
     try {
@@ -317,38 +450,22 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
 
               <Card style={styles.section}>
                 <Text style={styles.label}>Investment Type</Text>
-                <View style={styles.typeGrid}>
-                  {INVESTMENT_TYPES.map((investmentType) => {
-                    const selected = type === investmentType;
-                    const typeColor = INVESTMENT_TYPE_COLORS[investmentType];
-                    return (
-                      <Pressable
-                        key={investmentType}
-                        style={[
-                          styles.typeChip,
-                          selected && {
-                            borderColor: typeColor,
-                            backgroundColor: `${typeColor}15`,
-                          },
-                        ]}
-                        onPress={() => {
-                          touch();
-                          setType(investmentType);
-                        }}
-                      >
-                        <Text style={styles.typeEmoji}>
-                          {INVESTMENT_TYPE_ICONS[investmentType]}
-                        </Text>
-                        <Text
-                          style={[styles.typeChipText, selected && { color: typeColor }]}
-                          numberOfLines={1}
-                        >
-                          {INVESTMENT_TYPE_LABELS[investmentType]}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+                <ManageableDropdownField
+                  placeholder="Select investment type"
+                  selectedValue={type}
+                  items={investmentTypeDropdownItems}
+                  onSelect={(value) => {
+                    touch();
+                    setType(value);
+                  }}
+                  onDelete={(item) => {
+                    handleDeleteTypePress(item).catch(console.error);
+                  }}
+                  onCreate={() => setCreateTypeVisible(true)}
+                  createLabel="Create Investment Type"
+                  emptyMessage="No investment types yet. Create one to continue."
+                  onOpen={touch}
+                />
               </Card>
 
               <Card style={styles.section}>
@@ -402,45 +519,28 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
               </Card>
 
               <Card style={styles.section}>
-                <Text style={styles.label}>Deduction Date (day of month)</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.dayRow}
-                >
-                  {DEDUCTION_DAYS.map((day) => {
-                    const selected = deductionDay === day;
-                    return (
-                      <Pressable
-                        key={day}
-                        style={[styles.dayChip, selected && styles.dayChipSelected]}
-                        onPress={() => {
-                          touch();
-                          setDeductionDay(day);
-                        }}
-                      >
-                        <Text
-                          style={[styles.dayChipText, selected && styles.dayChipTextSelected]}
-                        >
-                          {day}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                <Text style={styles.label}>Deduction Date</Text>
+                <DateSelectorField
+                  value={deductionDate}
+                  onChange={(value) => {
+                    touch();
+                    setDeductionDate(value);
+                  }}
+                  onPress={touch}
+                  placeholder="Select deduction date"
+                />
               </Card>
 
               <Card style={styles.section}>
                 <Text style={styles.label}>Start Date</Text>
-                <TextInput
-                  style={styles.input}
+                <DateSelectorField
                   value={startDate}
-                  onChangeText={(value) => {
+                  onChange={(value) => {
                     touch();
                     setStartDate(value);
                   }}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={colors.textMuted}
+                  onPress={touch}
+                  placeholder="Select start date"
                 />
               </Card>
 
@@ -498,6 +598,39 @@ export function InvestmentFormScreen({ navigation, route }: Props) {
             </>
           )}
       </FormScreenContainer>
+
+      <CreateInvestmentTypeModal
+        visible={createTypeVisible}
+        name={newTypeName}
+        onChangeName={setNewTypeName}
+        onCancel={() => {
+          setCreateTypeVisible(false);
+          setNewTypeName('');
+        }}
+        onSubmit={handleCreateInvestmentType}
+        submitting={creatingType}
+      />
+
+      <ConfirmationModal
+        visible={deleteTypeTarget !== null}
+        title={DELETE_DIALOG_COPY.investmentType.title}
+        message={DELETE_DIALOG_COPY.investmentType.message()}
+        confirmLabel={DELETE_DIALOG_COPY.investmentType.confirmLabel}
+        cancelLabel={DELETE_DIALOG_COPY.investmentType.cancelLabel}
+        destructive
+        onConfirm={handleConfirmDeleteType}
+        onCancel={() => setDeleteTypeTarget(null)}
+      />
+
+      <ConfirmationModal
+        visible={typeDeleteBlockedVisible}
+        title={ERROR_COPY.investmentTypeDeleteBlocked.title}
+        message={ERROR_COPY.investmentTypeDeleteBlocked.message}
+        confirmLabel="Got It"
+        singleAction
+        icon="alert-circle-outline"
+        onConfirm={() => setTypeDeleteBlockedVisible(false)}
+      />
     </>
   );
 }
@@ -521,6 +654,13 @@ const styles = StyleSheet.create({
   notesInput: { minHeight: 80, textAlignVertical: 'top' },
   hint: { fontSize: 12, color: colors.textMuted, lineHeight: 18 },
   typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  emptyState: { gap: spacing.sm, alignItems: 'flex-start' },
+  emptyText: { fontSize: 13, color: colors.textMuted },
+  placeholderText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
   typeChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -565,23 +705,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   accountOptionTextSelected: { color: colors.primaryDark },
-  dayRow: { gap: spacing.xs, paddingVertical: spacing.xs },
-  dayChip: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  dayChipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
-  },
-  dayChipText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  dayChipTextSelected: { color: colors.primaryDark },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',

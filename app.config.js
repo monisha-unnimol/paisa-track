@@ -39,6 +39,10 @@ module.exports = {
     android: {
       ...base.expo.android,
       softwareKeyboardLayoutMode: 'resize',
+      permissions: [
+        'android.permission.READ_SMS',
+        'android.permission.RECEIVE_SMS',
+      ],
       blockedPermissions,
     },
     ios: {

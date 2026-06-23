@@ -1,4 +1,10 @@
-import { InvestmentType } from '../database/types';
+import { BuiltinInvestmentType, InvestmentType, InvestmentTypeDefinition } from '../database/types';
+
+export type InvestmentTypeDisplay = {
+  label: string;
+  icon: string;
+  color: string;
+};
 
 export const INVESTMENT_TYPES: InvestmentType[] = [
   'sip',
@@ -57,3 +63,32 @@ export const INVESTMENT_TYPE_COLORS: Record<InvestmentType, string> = {
 };
 
 export const DEDUCTION_DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+
+export function resolveInvestmentTypeDisplay(
+  slug: InvestmentType,
+  definitions?: InvestmentTypeDefinition[],
+): InvestmentTypeDisplay {
+  const fromDb = definitions?.find((item) => item.slug === slug);
+  if (fromDb) {
+    return {
+      label: fromDb.name,
+      icon: fromDb.icon,
+      color: fromDb.color,
+    };
+  }
+
+  if (slug in INVESTMENT_TYPE_LABELS) {
+    const builtin = slug as BuiltinInvestmentType;
+    return {
+      label: INVESTMENT_TYPE_LABELS[builtin],
+      icon: INVESTMENT_TYPE_ICONS[builtin],
+      color: INVESTMENT_TYPE_COLORS[builtin],
+    };
+  }
+
+  return {
+    label: slug.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+    icon: INVESTMENT_TYPE_ICONS.custom,
+    color: INVESTMENT_TYPE_COLORS.custom,
+  };
+}

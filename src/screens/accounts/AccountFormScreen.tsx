@@ -9,13 +9,13 @@ import {
 } from 'react-native';
 import { AccountFormFields } from '../../components/accounts/AccountFormFields';
 import { AccountDeleteDialogs } from '../../components/accounts/AccountDeleteDialogs';
+import { DefaultAccountChangeDialogs } from '../../components/accounts/DefaultAccountChangeDialogs';
 import { accountFormStyles } from '../../components/accounts/accountFormStyles';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { Card } from '../../components/Card';
 import { FormScreenContainer } from '../../components/FormScreenContainer';
 import { UnsavedChangesModal } from '../../components/UnsavedChangesModal';
 import {
-  DELETE_DIALOG_COPY,
   ERROR_COPY,
   SUCCESS_COPY,
   VALIDATION_COPY,
@@ -34,6 +34,7 @@ import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { SECURITY_COPY } from '../../constants/dialogCopy';
 import { useAccountDetailsAccess } from '../../hooks/useAccountDetailsAccess';
 import { useAccountDeleteFlow } from '../../hooks/useAccountDeleteFlow';
+import { useDefaultAccountChangeFlow } from '../../hooks/useDefaultAccountChangeFlow';
 import { useModalStore } from '../../store/useModalStore';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
@@ -64,7 +65,6 @@ function applyAccountToForm(account: Account) {
 export function AccountFormScreen({ navigation, route }: Props) {
   const { accountId } = route.params ?? {};
   const isEditing = Boolean(accountId);
-  const accounts = useAccountStore((state) => state.accounts);
   const { addAccount, editAccount, loadAccounts } = useAccountStore();
   const showError = useModalStore((state) => state.showError);
   const baselineRef = useRef(EMPTY_FORM);
@@ -142,28 +142,17 @@ export function AccountFormScreen({ navigation, route }: Props) {
       ),
   });
 
-  const handleDefaultChange = (value: boolean) => {
-    if (!value && isDefault) {
-      if (accounts.length <= 1) {
-        showError(
-          DELETE_DIALOG_COPY.accountOnlyAccount.title,
-          DELETE_DIALOG_COPY.accountOnlyAccount.message,
-        );
-        return;
-      }
-
-      if (accounts.filter((account) => account.isDefault).length === 1) {
-        showError(
-          DELETE_DIALOG_COPY.accountDefaultMustChange.title,
-          DELETE_DIALOG_COPY.accountDefaultMustChange.message,
-        );
-        return;
-      }
-    }
-
-    touch();
-    setIsDefault(value);
-  };
+  const defaultAccountFlow = useDefaultAccountChangeFlow({
+    accountId,
+    accountName: name,
+    isDefault,
+    isEditing,
+    setIsDefault,
+    onBaselineDefaultChange: (nextIsDefault) => {
+      baselineRef.current = { ...baselineRef.current, isDefault: nextIsDefault };
+    },
+    touch,
+  });
 
   const populateForm = useCallback((account: Account) => {
     const values = applyAccountToForm(account);
@@ -321,6 +310,7 @@ export function AccountFormScreen({ navigation, route }: Props) {
         onCancel={cancelDiscard}
       />
       <AccountDeleteDialogs flow={deleteFlow} excludeAccountId={accountId} />
+      <DefaultAccountChangeDialogs flow={defaultAccountFlow} />
       <PinVerificationModal
         visible={verifyVisible}
         onCancel={onVerifyCancel}
@@ -343,7 +333,7 @@ export function AccountFormScreen({ navigation, route }: Props) {
           onBalanceChange={setBalance}
           onIconChange={setIcon}
           onColorChange={setColor}
-          onDefaultChange={handleDefaultChange}
+          onDefaultChange={defaultAccountFlow.handleDefaultChange}
           onTouch={touch}
         />
 

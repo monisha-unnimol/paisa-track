@@ -1,6 +1,6 @@
 [
     {
-        "merged": "expo.modules.smslistener.sms-listener-release-3:/drawable-v29/autofill_inline_suggestion_chip_background.xml",
-        "source": "expo.modules.smslistener.sms-listener-autofill-1.1.0-11:/drawable-v29/autofill_inline_suggestion_chip_background.xml"
+        "merged": "expo.modules.smslistener.sms-listener-release-28:/drawable-v29/autofill_inline_suggestion_chip_background.xml",
+        "source": "expo.modules.smslistener.sms-listener-autofill-1.1.0-4:/drawable-v29/autofill_inline_suggestion_chip_background.xml"
     }
 ]

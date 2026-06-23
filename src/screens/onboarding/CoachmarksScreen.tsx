@@ -7,11 +7,18 @@ import { OnboardingScreen } from '../../components/OnboardingScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import { useUserProfileStore } from '../../store/useUserProfileStore';
+import { useOnboardingStore } from '../../store/useOnboardingStore';
 import { colors } from '../../theme/colors';
 import { formStyles } from '../../theme/formStyles';
 import { radius, spacing } from '../../theme/spacing';
 
 type Props = NativeStackScreenProps<OnboardingStackParamList, 'Coachmarks'>;
+
+const SETUP_SUMMARY = [
+  { key: 'profile', label: 'Profile Created', completed: true },
+  { key: 'pin', label: 'PIN Configured', completed: true },
+  { key: 'account', label: 'Account Added', completed: true },
+] as const;
 
 const TIPS = [
   {
@@ -31,9 +38,11 @@ const TIPS = [
   },
 ];
 
-export function CoachmarksScreen(_props: Props) {
+export function CoachmarksScreen({ route }: Props) {
   const completeOnboarding = useUserProfileStore((state) => state.completeOnboarding);
+  const clearOnboardingAccount = useOnboardingStore((state) => state.clearOnboardingAccount);
   const contentOpacity = useRef(new Animated.Value(0)).current;
+  const smsTrackingStatus = route.params?.smsTrackingStatus ?? 'skipped';
 
   useEffect(() => {
     Animated.timing(contentOpacity, {
@@ -44,8 +53,16 @@ export function CoachmarksScreen(_props: Props) {
   }, [contentOpacity]);
 
   const handleGetStarted = async () => {
+    await clearOnboardingAccount();
     await completeOnboarding();
   };
+
+  const summaryItems = [
+    ...SETUP_SUMMARY,
+    smsTrackingStatus === 'enabled'
+      ? { key: 'sms-enabled', label: 'SMS Tracking Enabled', completed: true }
+      : { key: 'sms-skipped', label: 'SMS Tracking Skipped', completed: false },
+  ];
 
   return (
     <OnboardingScreen
@@ -61,7 +78,31 @@ export function CoachmarksScreen(_props: Props) {
     >
       <Animated.View style={{ opacity: contentOpacity, gap: spacing.md }}>
         <Text style={formStyles.screenSubtitle}>
-          Here are a few tips to help you get the most out of PaisaTrack.
+          You are all set. Here is what was configured during setup.
+        </Text>
+
+        <Card style={styles.summaryCard}>
+          {summaryItems.map((item) => (
+            <View key={item.key} style={styles.summaryRow}>
+              <Ionicons
+                name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
+                size={20}
+                color={item.completed ? colors.success : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  !item.completed && styles.summaryLabelMuted,
+                ]}
+              >
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </Card>
+
+        <Text style={[formStyles.screenSubtitle, styles.tipsHeading]}>
+          A few tips to help you get the most out of PaisaTrack.
         </Text>
 
         <View style={styles.tips}>
@@ -83,6 +124,26 @@ export function CoachmarksScreen(_props: Props) {
 }
 
 const styles = StyleSheet.create({
+  summaryCard: {
+    gap: spacing.sm,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  summaryLabelMuted: {
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  tipsHeading: {
+    marginTop: spacing.xs,
+  },
   tips: {
     gap: spacing.md,
   },

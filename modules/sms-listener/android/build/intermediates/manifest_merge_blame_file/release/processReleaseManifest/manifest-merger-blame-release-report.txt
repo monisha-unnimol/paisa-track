@@ -4,26 +4,33 @@
 4
 5    <uses-sdk android:minSdkVersion="24" />
 6
-7    <application>
-7-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:2:3-12:17
-8        <receiver
-8-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:3:5-11:16
-9            android:name="expo.modules.smslistener.SmsBroadcastReceiver"
-9-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:4:7-67
-10            android:enabled="true"
-10-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:5:7-29
-11            android:exported="true"
-11-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:6:7-30
-12            android:permission="android.permission.BROADCAST_SMS" >
-12-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:7:7-60
-13            <intent-filter android:priority="999" >
-13-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:8:7-10:23
-13-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:8:22-44
-14                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-14-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:9:9-74
-14-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:9:17-71
-15            </intent-filter>
-16        </receiver>
-17    </application>
-18
-19</manifest>
+7    <uses-permission android:name="android.permission.READ_SMS" />
+7-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:2:3-64
+7-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:2:20-62
+8    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+8-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:3:3-67
+8-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:3:20-65
+9
+10    <application>
+10-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:4:3-14:17
+11        <receiver
+11-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:5:5-13:16
+12            android:name="expo.modules.smslistener.SmsBroadcastReceiver"
+12-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:6:7-67
+13            android:enabled="true"
+13-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:7:7-29
+14            android:exported="true"
+14-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:8:7-30
+15            android:permission="android.permission.BROADCAST_SMS" >
+15-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:9:7-60
+16            <intent-filter android:priority="999" >
+16-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:10:7-12:23
+16-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:10:22-44
+17                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+17-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:11:9-74
+17-->/Users/monisha/expense-tracker/modules/sms-listener/android/src/main/AndroidManifest.xml:11:17-71
+18            </intent-filter>
+19        </receiver>
+20    </application>
+21
+22</manifest>

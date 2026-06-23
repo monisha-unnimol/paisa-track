@@ -1,4 +1,10 @@
 import * as SQLite from 'expo-sqlite';
+import {
+  INVESTMENT_TYPES,
+  INVESTMENT_TYPE_COLORS,
+  INVESTMENT_TYPE_ICONS,
+  INVESTMENT_TYPE_LABELS,
+} from '../constants/investmentOptions';
 
 const BASE_SCHEMA = `
   PRAGMA journal_mode = WAL;
@@ -148,6 +154,9 @@ async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
   await createUserProfileTable(db);
   await createReviewRequestsTable(db);
   await migrateCategoryScope(db);
+  await createInvestmentTypesTable(db);
+  await migrateInvestmentsFlexibleType(db);
+  await seedBuiltinInvestmentTypes(db);
 }
 
 async function createReviewRequestsTable(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -175,28 +184,6 @@ async function createReviewRequestsTable(db: SQLite.SQLiteDatabase): Promise<voi
 
 async function migrateCategoryScope(db: SQLite.SQLiteDatabase): Promise<void> {
   await ensureColumn(db, 'categories', 'scope', "TEXT NOT NULL DEFAULT 'spending'");
-
-  const recurringNames = [
-    'Rent',
-    'EMI',
-    'Insurance',
-    'Electricity',
-    'Internet',
-    'Water Bill',
-    'Maintenance',
-    'OTT Subscriptions',
-    'Gym Membership',
-    'School Fees',
-    'Custom Expenses',
-    'Investment',
-  ];
-
-  for (const name of recurringNames) {
-    await db.runAsync(
-      "UPDATE categories SET scope = 'recurring' WHERE name = ? COLLATE NOCASE",
-      name,
-    );
-  }
 }
 
 async function createUserProfileTable(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -216,10 +203,7 @@ async function createInvestmentsTable(db: SQLite.SQLiteDatabase): Promise<void> 
     CREATE TABLE IF NOT EXISTS investments (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN (
-        'sip', 'mutual_fund', 'stocks', 'ppf', 'epf', 'nps',
-        'fixed_deposit', 'recurring_deposit', 'gold', 'crypto', 'custom'
-      )),
+      type TEXT NOT NULL,
       amount REAL NOT NULL,
       account_id TEXT NOT NULL,
       deduction_day INTEGER NOT NULL CHECK(deduction_day >= 1 AND deduction_day <= 31),
@@ -276,6 +260,107 @@ async function createRecurringExpensesTable(db: SQLite.SQLiteDatabase): Promise<
   await db.execAsync(
     'CREATE INDEX IF NOT EXISTS idx_recurring_expenses_is_active ON recurring_expenses(is_active)',
   );
+}
+
+async function createInvestmentTypesTable(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS investment_types (
+      id TEXT PRIMARY KEY NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL UNIQUE,
+      icon TEXT NOT NULL,
+      color TEXT NOT NULL,
+      is_builtin INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await db.execAsync(
+    'CREATE INDEX IF NOT EXISTS idx_investment_types_slug ON investment_types(slug)',
+  );
+}
+
+async function migrateInvestmentsFlexibleType(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync(`CREATE TABLE IF NOT EXISTS schema_migrations (id TEXT PRIMARY KEY)`);
+
+  const done = await db.getFirstAsync<{ id: string }>(
+    "SELECT id FROM schema_migrations WHERE id = 'investments_type_flexible'",
+  );
+  if (done) return;
+
+  const columns = await getColumnNames(db, 'investments');
+  if (columns.length === 0) {
+    await db.runAsync(
+      "INSERT OR IGNORE INTO schema_migrations (id) VALUES ('investments_type_flexible')",
+    );
+    return;
+  }
+
+  await db.execAsync(`
+    CREATE TABLE investments_new (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      account_id TEXT NOT NULL,
+      deduction_day INTEGER NOT NULL CHECK(deduction_day >= 1 AND deduction_day <= 31),
+      start_date TEXT NOT NULL,
+      notes TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      last_processed_month TEXT,
+      last_processed_date TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+    );
+
+    INSERT INTO investments_new (
+      id, name, type, amount, account_id, deduction_day, start_date, notes,
+      is_active, last_processed_month, last_processed_date, created_at, updated_at
+    )
+    SELECT
+      id, name, type, amount, account_id, deduction_day, start_date, notes,
+      is_active, last_processed_month, last_processed_date, created_at, updated_at
+    FROM investments;
+
+    DROP TABLE investments;
+    ALTER TABLE investments_new RENAME TO investments;
+  `);
+
+  await db.execAsync(
+    'CREATE INDEX IF NOT EXISTS idx_investments_account_id ON investments(account_id)',
+  );
+  await db.execAsync(
+    'CREATE INDEX IF NOT EXISTS idx_investments_is_active ON investments(is_active)',
+  );
+  await db.runAsync(
+    "INSERT OR IGNORE INTO schema_migrations (id) VALUES ('investments_type_flexible')",
+  );
+}
+
+async function seedBuiltinInvestmentTypes(db: SQLite.SQLiteDatabase): Promise<void> {
+  const timestamp = new Date().toISOString();
+
+  for (const slug of INVESTMENT_TYPES) {
+    const existing = await db.getFirstAsync<{ id: string }>(
+      'SELECT id FROM investment_types WHERE slug = ?',
+      slug,
+    );
+    if (existing) continue;
+
+    await db.runAsync(
+      `INSERT INTO investment_types (id, slug, name, icon, color, is_builtin, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+      `builtin-${slug}`,
+      slug,
+      INVESTMENT_TYPE_LABELS[slug],
+      INVESTMENT_TYPE_ICONS[slug],
+      INVESTMENT_TYPE_COLORS[slug],
+      timestamp,
+      timestamp,
+    );
+  }
 }
 
 async function createIndexes(db: SQLite.SQLiteDatabase): Promise<void> {

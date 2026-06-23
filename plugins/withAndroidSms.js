@@ -3,6 +3,10 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 const SMS_PERMISSIONS = [
   'android.permission.RECEIVE_SMS',
   'android.permission.READ_SMS',
+];
+
+const SMS_PERMISSIONS_WITH_NOTIFICATIONS = [
+  ...SMS_PERMISSIONS,
   'android.permission.POST_NOTIFICATIONS',
 ];
 
@@ -10,15 +14,20 @@ function withAndroidSms(config) {
   return withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
 
+    if (!manifest.$) {
+      manifest.$ = {};
+    }
+    manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
+
     if (!manifest['uses-permission']) {
       manifest['uses-permission'] = [];
     }
 
-    // Drop stale blocked-permission remove entries so SMS can be requested at runtime.
+    // Remove stale blocked-permission remove entries so SMS can be declared and requested.
     manifest['uses-permission'] = manifest['uses-permission'].filter((entry) => {
       const name = entry.$['android:name'];
       const isRemoved = entry.$['tools:node'] === 'remove';
-      return !(isRemoved && SMS_PERMISSIONS.includes(name));
+      return !(isRemoved && SMS_PERMISSIONS_WITH_NOTIFICATIONS.includes(name));
     });
 
     for (const permission of SMS_PERMISSIONS) {

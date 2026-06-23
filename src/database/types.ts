@@ -140,7 +140,7 @@ export interface TransactionWithDetails extends Transaction {
   accountName: string;
 }
 
-export type InvestmentType =
+export type BuiltinInvestmentType =
   | 'sip'
   | 'mutual_fund'
   | 'stocks'
@@ -152,6 +152,25 @@ export type InvestmentType =
   | 'gold'
   | 'crypto'
   | 'custom';
+
+export type InvestmentType = BuiltinInvestmentType | (string & {});
+
+export interface InvestmentTypeDefinition {
+  id: string;
+  slug: string;
+  name: string;
+  icon: string;
+  color: string;
+  isBuiltin: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateInvestmentTypeInput {
+  name: string;
+  icon?: string;
+  color?: string;
+}
 
 export interface Investment {
   id: string;

@@ -1,7 +1,5 @@
 import {
-  INVESTMENT_TYPE_COLORS,
-  INVESTMENT_TYPE_ICONS,
-  INVESTMENT_TYPE_LABELS,
+  resolveInvestmentTypeDisplay,
 } from '../constants/investmentOptions';
 import {
   InvestmentWithDetails,
@@ -10,8 +8,6 @@ import {
 import { colors } from '../theme/colors';
 import { getTotalMonthlyInvestments } from './investmentHelpers';
 import { normalizeToMonthly } from './recurringHelpers';
-import { RecurringExpenseCategoryType } from '../constants/recurringOptions';
-import { findCategoryTypeByName } from '../services/recurring/recurringCategoryService';
 
 export type RecurringSegment = 'all' | 'investments' | 'expenses';
 
@@ -60,12 +56,12 @@ export function toUnifiedInvestmentItem(
     amount: investment.amount,
     accountName: investment.accountName,
     accountIcon: investment.accountIcon,
-    typeLabel: INVESTMENT_TYPE_LABELS[investment.type],
+    typeLabel: resolveInvestmentTypeDisplay(investment.type).label,
     nextDueDate: investment.nextDeductionDate,
     status: investment.status,
     isActive: investment.isActive,
     accentColor: INVESTMENT_ACCENT,
-    icon: INVESTMENT_TYPE_ICONS[investment.type],
+    icon: resolveInvestmentTypeDisplay(investment.type).icon,
     raw: investment,
   };
 }
@@ -159,29 +155,10 @@ const OVERVIEW_GROUP_COLORS: Record<ExpenseOverviewGroup, string> = {
   other: '#94A3B8',
 };
 
-const CATEGORY_TO_OVERVIEW: Record<RecurringExpenseCategoryType, ExpenseOverviewGroup> = {
-  rent: 'rent',
-  emi: 'emi',
-  insurance: 'insurance',
-  electricity: 'utilities',
-  internet: 'utilities',
-  water_bill: 'utilities',
-  maintenance: 'utilities',
-  ott_subscriptions: 'subscriptions',
-  gym_membership: 'subscriptions',
-  school_fees: 'subscriptions',
-  custom: 'other',
-};
-
 export function classifyExpenseOverviewGroup(
   categoryName: string,
   expenseName: string,
 ): ExpenseOverviewGroup {
-  const matchedType = findCategoryTypeByName(categoryName);
-  if (matchedType) {
-    return CATEGORY_TO_OVERVIEW[matchedType];
-  }
-
   const text = `${categoryName} ${expenseName}`.toLowerCase();
 
   if (text.includes('rent')) return 'rent';

@@ -30,19 +30,25 @@ export type SmsPermissionResult =
 
 export async function requestSmsPermissions(): Promise<SmsPermissionResult> {
   if (Platform.OS !== 'android') {
+    console.log('[SMS] Permission request skipped: not Android');
     return 'denied';
   }
+
+  console.log('[SMS] Permission request initiated');
 
   const readResult = await PermissionsAndroid.request(
     PermissionsAndroid.PERMISSIONS.READ_SMS,
     SMS_RATIONALE,
   );
+  console.log('[SMS] READ_SMS result:', readResult);
 
   if (readResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+    console.log('[SMS] Permission permanently denied: READ_SMS');
     return 'blocked';
   }
 
   if (readResult !== PermissionsAndroid.RESULTS.GRANTED) {
+    console.log('[SMS] Permission denied: READ_SMS');
     return 'denied';
   }
 
@@ -50,12 +56,15 @@ export async function requestSmsPermissions(): Promise<SmsPermissionResult> {
     PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
     RECEIVE_SMS_RATIONALE,
   );
+  console.log('[SMS] RECEIVE_SMS result:', receiveResult);
 
   if (receiveResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+    console.log('[SMS] Permission permanently denied: RECEIVE_SMS');
     return 'blocked';
   }
 
   if (receiveResult !== PermissionsAndroid.RESULTS.GRANTED) {
+    console.log('[SMS] Permission denied: RECEIVE_SMS');
     return 'denied';
   }
 
@@ -66,6 +75,7 @@ export async function requestSmsPermissions(): Promise<SmsPermissionResult> {
     );
   }
 
+  console.log('[SMS] Permission granted');
   return 'granted';
 }
 
@@ -81,5 +91,12 @@ export async function hasSmsPermissions(): Promise<boolean> {
     PermissionsAndroid.PERMISSIONS.READ_SMS,
   );
 
-  return receiveGranted && readGranted;
+  const granted = receiveGranted && readGranted;
+  console.log('[SMS] Current permission status:', {
+    readGranted,
+    receiveGranted,
+    granted,
+  });
+
+  return granted;
 }

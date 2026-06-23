@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "expo.modules.smslistener.sms-listener-release-3:/values-v17/values-v17.xml",
+            "outputFile": "expo.modules.smslistener.sms-listener-mergeReleaseResources-26:/values-v17/values-v17.xml",
             "map": [
                 {
-                    "source": "/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/5c33178ed4a7df511a801f04b0031571/gradle/caches/8.14.3/transforms/19c4a7e5db7750419bcfd64d0a0fbd96/transformed/appcompat-1.7.0/res/values-v17/values-v17.xml",
+                    "source": "/Users/monisha/.gradle/caches/8.14.3/transforms/19c4a7e5db7750419bcfd64d0a0fbd96/transformed/appcompat-1.7.0/res/values-v17/values-v17.xml",
                     "from": {
                         "startLines": "2,5,9,12,15,18,22,25,29,33,37,40,43,46,50,53,57",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -17,10 +17,10 @@
             ]
         },
         {
-            "outputFile": "expo.modules.smslistener.sms-listener-mergeReleaseResources-1:/values-v17/values-v17.xml",
+            "outputFile": "expo.modules.smslistener.sms-listener-release-28:/values-v17/values-v17.xml",
             "map": [
                 {
-                    "source": "/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/5c33178ed4a7df511a801f04b0031571/gradle/caches/8.14.3/transforms/19c4a7e5db7750419bcfd64d0a0fbd96/transformed/appcompat-1.7.0/res/values-v17/values-v17.xml",
+                    "source": "/Users/monisha/.gradle/caches/8.14.3/transforms/19c4a7e5db7750419bcfd64d0a0fbd96/transformed/appcompat-1.7.0/res/values-v17/values-v17.xml",
                     "from": {
                         "startLines": "2,5,9,12,15,18,22,25,29,33,37,40,43,46,50,53,57",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",

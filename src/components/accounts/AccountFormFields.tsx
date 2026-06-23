@@ -171,10 +171,7 @@ export function AccountFormFields({
           </View>
           <AppSwitch
             value={values.isDefault}
-            onValueChange={(value) => {
-              touch();
-              onDefaultChange(value);
-            }}
+            onValueChange={onDefaultChange}
             accessibilityLabel="Default account"
           />
         </Card>

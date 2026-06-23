@@ -6,7 +6,7 @@
     mergedManifest="build/intermediates/merged_manifest/release/processReleaseManifest/AndroidManifest.xml"
     proguardFiles="build/intermediates/default_proguard_files/global/proguard-android.txt-8.11.0"
     partialResultsDir="build/intermediates/lint_vital_partial_results/release/lintVitalAnalyzeRelease/out"
-    desugaredMethodsFiles="/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/5c33178ed4a7df511a801f04b0031571/gradle/caches/8.14.3/transforms/e95c373bd39b19e9f17e1e1b74501ca6/transformed/D8BackportedDesugaredMethods.txt">
+    desugaredMethodsFiles="/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/2940bf12dbdc6c2bab77237921735c7e/gradle/caches/8.14.3/transforms/e95c373bd39b19e9f17e1e1b74501ca6/transformed/D8BackportedDesugaredMethods.txt">
   <buildFeatures
       namespacing="REQUIRED"/>
   <sourceProviders>
@@ -26,6 +26,6 @@
       applicationId="expo.modules.smslistener"
       generatedSourceFolders="build/generated/ap_generated_sources/release/out:build/generated/source/buildConfig/release"
       generatedResourceFolders="build/generated/res/resValues/release"
-      desugaredMethodsFiles="/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/5c33178ed4a7df511a801f04b0031571/gradle/caches/8.14.3/transforms/e95c373bd39b19e9f17e1e1b74501ca6/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/private/var/folders/d8/vt1qsvzx5x3d82y3l7tfhr3w0000gp/T/cursor-sandbox-cache/2940bf12dbdc6c2bab77237921735c7e/gradle/caches/8.14.3/transforms/e95c373bd39b19e9f17e1e1b74501ca6/transformed/D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

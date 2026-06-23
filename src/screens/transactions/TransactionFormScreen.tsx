@@ -12,6 +12,7 @@ import {
 import { Card } from '../../components/Card';
 import { FormScreenContainer } from '../../components/FormScreenContainer';
 import { CurrencyInput } from '../../components/CurrencyInput';
+import { DateSelectorField } from '../../components/DateSelectorField';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { UnsavedChangesModal } from '../../components/UnsavedChangesModal';
 import {
@@ -38,6 +39,7 @@ import { matchAccountFromSms } from '../../utils/accountMatching';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { parseCurrencyValue } from '../../utils/currency';
+import { isValidDateString } from '../../utils/dateStrings';
 
 type Props = NativeStackScreenProps<TransactionsStackParamList, 'TransactionForm'>;
 
@@ -254,7 +256,7 @@ export function TransactionFormScreen({ navigation, route }: Props) {
       return;
     }
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    if (!isValidDateString(date)) {
       showError(VALIDATION_COPY.transactionDate.title, VALIDATION_COPY.transactionDate.message);
       return;
     }
@@ -538,15 +540,14 @@ export function TransactionFormScreen({ navigation, route }: Props) {
 
         <Card style={styles.section}>
           <Text style={styles.label}>Date</Text>
-          <TextInput
-            style={styles.input}
+          <DateSelectorField
             value={date}
-            onChangeText={(value) => {
+            onChange={(value) => {
               touch();
               setDate(value);
             }}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textMuted}
+            onPress={touch}
+            placeholder="Select date"
           />
         </Card>
 

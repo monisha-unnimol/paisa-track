@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { databaseService } from '../database';
 import { runInvestmentScheduler } from '../services/investments/investmentScheduler';
-import { ensureRecurringExpenseCategories } from '../services/recurring/recurringCategoryService';
 import { runRecurringScheduler } from '../services/recurring/recurringScheduler';
 import { syncSmsTracking } from '../services/sms/smsTrackingService';
 import { useAccountStore } from '../store/useAccountStore';
@@ -28,11 +27,14 @@ export function useAppBootstrap() {
       try {
         await databaseService.initialize();
 
-        await ensureRecurringExpenseCategories().catch(console.error);
         await useUserProfileStore.getState().loadProfileState();
         await usePrivacyStore.getState().loadPrivacyState();
         await useAccountStore.getState().loadAccounts();
         await useSettingsStore.getState().loadSettings();
+        const invalidSmsState = useSettingsStore.getState().smsInvalidStateDetected;
+        if (invalidSmsState) {
+          console.log('[SMS] Invalid tracking state corrected on launch');
+        }
         await useReviewStore.getState().loadReviews().catch(console.error);
         await runInvestmentScheduler().catch(console.error);
         await runRecurringScheduler().catch(console.error);

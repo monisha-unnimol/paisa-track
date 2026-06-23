@@ -17,8 +17,6 @@ import {
 import { createInvestmentReview } from '../reviews/reviewService';
 
 const STORAGE_KEY = '@expense_tracker/investment_notify_state';
-const INVESTMENT_CATEGORY_NAME = 'Investment';
-
 type NotifyState = Record<string, string>;
 
 async function readStates(): Promise<NotifyState> {
@@ -32,20 +30,6 @@ async function readStates(): Promise<NotifyState> {
 
 async function writeStates(states: NotifyState): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(states));
-}
-
-async function ensureInvestmentCategoryId(): Promise<string> {
-  const existing = await databaseService.getCategoryByName(INVESTMENT_CATEGORY_NAME, 'recurring');
-  if (existing) return existing.id;
-
-  const created = await databaseService.createCategory({
-    name: INVESTMENT_CATEGORY_NAME,
-    icon: '📈',
-    color: '#6366F1',
-    budget: 0,
-    scope: 'recurring',
-  });
-  return created.id;
 }
 
 async function getAccountName(accountId: string): Promise<string> {
@@ -88,7 +72,6 @@ function isDeductionTomorrow(investment: Investment, today: Date): boolean {
 
 export async function processInvestmentDeductions(): Promise<void> {
   const today = new Date();
-  const categoryId = await ensureInvestmentCategoryId();
   const investments = await databaseService.getActiveInvestments();
 
   for (const investment of investments) {
@@ -101,7 +84,7 @@ export async function processInvestmentDeductions(): Promise<void> {
     await databaseService.createTransaction({
       title: investment.name,
       amount: investment.amount,
-      categoryId,
+      categoryId: null,
       accountId: investment.accountId,
       date: todayStr,
       type: 'expense',

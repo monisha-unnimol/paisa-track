@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { AppSwitch } from '../../components/AppSwitch';
 import { Card } from '../../components/Card';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { UserAvatar } from '../../components/UserAvatar';
-import { ERROR_COPY } from '../../constants/dialogCopy';
+import { ERROR_COPY, SMS_COPY } from '../../constants/dialogCopy';
 import { HomeStackParamList } from '../../navigation/HomeStackNavigator';
 import { getSmsTrackingStatus } from '../../services/sms/smsTrackingService';
 import { isSmsListenerAvailable } from '../../services/sms/smsListenerService';
@@ -31,11 +32,19 @@ export function SettingsScreen({ navigation }: Props) {
   const showError = useModalStore((state) => state.showError);
   const profile = useUserProfileStore((state) => state.profile);
   const displayName = useUserProfileStore((state) => state.getDisplayName());
-  const { smsAutoTrackingEnabled, hydrated, loadSettings, setSmsAutoTrackingEnabled } =
-    useSettingsStore();
+  const {
+    smsAutoTrackingEnabled,
+    hydrated,
+    smsInvalidStateDetected,
+    clearSmsInvalidState,
+    loadSettings,
+    setSmsAutoTrackingEnabled,
+  } = useSettingsStore();
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [explainVisible, setExplainVisible] = useState(false);
+  const [invalidStateVisible, setInvalidStateVisible] = useState(false);
 
   const smsAvailable = Platform.OS === 'android' && isSmsListenerAvailable();
 
@@ -51,39 +60,74 @@ export function SettingsScreen({ navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      if (!useSettingsStore.getState().hydrated) {
-        loadSettings().catch(console.error);
+      let active = true;
+
+      async function load() {
+        if (!useSettingsStore.getState().hydrated) {
+          const result = await loadSettings();
+          if (!active) return;
+          if (result === 'disabled_invalid') {
+            setInvalidStateVisible(true);
+          }
+        } else if (smsInvalidStateDetected) {
+          setInvalidStateVisible(true);
+        }
+
+        await refreshStatus();
       }
-      refreshStatus();
-    }, [loadSettings, refreshStatus]),
+
+      load().catch(console.error);
+
+      return () => {
+        active = false;
+      };
+    }, [loadSettings, refreshStatus, smsInvalidStateDetected]),
   );
+
+  const handleEnableResult = async (result: Awaited<ReturnType<typeof setSmsAutoTrackingEnabled>>) => {
+    if (result === 'unavailable') {
+      showError(
+        ERROR_COPY.smsTrackingUnavailable.title,
+        ERROR_COPY.smsTrackingUnavailable.message,
+      );
+    } else if (result === 'blocked') {
+      showError(
+        ERROR_COPY.smsPermissionBlocked.title,
+        ERROR_COPY.smsPermissionBlocked.message,
+      );
+      Linking.openSettings();
+    } else if (result === 'denied') {
+      showError(
+        ERROR_COPY.smsPermissionDenied.title,
+        ERROR_COPY.smsPermissionDenied.message,
+      );
+    }
+    await refreshStatus();
+  };
 
   const handleToggle = async (nextValue: boolean) => {
     if (updating) return;
 
+    if (!nextValue) {
+      setUpdating(true);
+      try {
+        await setSmsAutoTrackingEnabled(false);
+        await refreshStatus();
+      } finally {
+        setUpdating(false);
+      }
+      return;
+    }
+
+    setExplainVisible(true);
+  };
+
+  const handleConfirmEnable = async () => {
+    setExplainVisible(false);
     setUpdating(true);
     try {
-      const result = await setSmsAutoTrackingEnabled(nextValue);
-      if (nextValue) {
-        if (result === 'unavailable') {
-          showError(
-            ERROR_COPY.smsTrackingUnavailable.title,
-            ERROR_COPY.smsTrackingUnavailable.message,
-          );
-        } else if (result === 'blocked') {
-          showError(
-            ERROR_COPY.smsPermissionBlocked.title,
-            ERROR_COPY.smsPermissionBlocked.message,
-          );
-          Linking.openSettings();
-        } else if (result === 'denied') {
-          showError(
-            ERROR_COPY.smsPermissionDenied.title,
-            ERROR_COPY.smsPermissionDenied.message,
-          );
-        }
-      }
-      await refreshStatus();
+      const result = await setSmsAutoTrackingEnabled(true);
+      await handleEnableResult(result);
     } finally {
       setUpdating(false);
     }
@@ -99,6 +143,30 @@ export function SettingsScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer omitTopInset>
+      <ConfirmationModal
+        visible={explainVisible}
+        title={SMS_COPY.enableExplanation.title}
+        message={SMS_COPY.enableExplanation.message}
+        confirmLabel={SMS_COPY.enableExplanation.confirmLabel}
+        cancelLabel={SMS_COPY.enableExplanation.cancelLabel}
+        icon="chatbubble-ellipses-outline"
+        onConfirm={handleConfirmEnable}
+        onCancel={() => setExplainVisible(false)}
+      />
+
+      <ConfirmationModal
+        visible={invalidStateVisible}
+        title={ERROR_COPY.smsTrackingInvalidState.title}
+        message={ERROR_COPY.smsTrackingInvalidState.message}
+        confirmLabel="Got It"
+        singleAction
+        icon="alert-circle-outline"
+        onConfirm={() => {
+          setInvalidStateVisible(false);
+          clearSmsInvalidState();
+        }}
+      />
+
       <Pressable
         style={({ pressed }) => [styles.profileRow, pressed && styles.profileRowPressed]}
         onPress={() => navigation.navigate('EditProfile', { returnRoute: 'Settings' })}
@@ -144,18 +212,13 @@ export function SettingsScreen({ navigation }: Props) {
       <Card style={styles.settingCard}>
         <View style={styles.settingRow}>
           <View style={styles.settingInfo}>
-            <Text style={styles.settingLabel}>Automatic Expense Tracking from SMS</Text>
+            <Text style={styles.settingLabel}>SMS Tracking</Text>
             <Text style={styles.settingDescription}>
               Detect bank transaction SMS and create review requests automatically.
             </Text>
-            {smsAutoTrackingEnabled && smsAvailable && !permissionGranted && !checkingStatus && (
-              <Text style={styles.settingWarning}>
-                SMS permission is required. Turn the switch off and on again to grant access.
-              </Text>
-            )}
             {!smsAvailable && (
               <Text style={styles.settingMuted}>
-                SMS tracking is only available on Android builds that include the SMS module.
+                SMS tracking requires a development or release build. It does not work in Expo Go.
               </Text>
             )}
           </View>
@@ -163,19 +226,43 @@ export function SettingsScreen({ navigation }: Props) {
             value={smsAutoTrackingEnabled}
             onValueChange={handleToggle}
             disabled={!smsAvailable || updating || checkingStatus}
-            accessibilityLabel="Automatic expense tracking from SMS"
+            accessibilityLabel="SMS tracking"
           />
         </View>
 
-        {smsAutoTrackingEnabled && permissionGranted && (
+        {smsAvailable && (
           <View style={styles.statusRow}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-            <Text style={styles.statusText}>SMS tracking is active</Text>
+            <Text style={styles.statusLabel}>SMS Permission</Text>
+            {checkingStatus ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text
+                style={[
+                  styles.statusValue,
+                  permissionGranted ? styles.statusGranted : styles.statusDenied,
+                ]}
+              >
+                {permissionGranted ? 'Granted' : 'Not Granted'}
+              </Text>
+            )}
           </View>
+        )}
+
+        {smsAutoTrackingEnabled && permissionGranted && (
+          <View style={styles.activeRow}>
+            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <Text style={styles.activeText}>SMS tracking is active</Text>
+          </View>
+        )}
+
+        {smsAutoTrackingEnabled && !permissionGranted && !checkingStatus && (
+          <Text style={styles.settingWarning}>
+            SMS permission is required. Turn the switch off and on again to grant access.
+          </Text>
         )}
       </Card>
 
-      {permissionGranted && (
+      {smsAvailable && (
         <Pressable
           style={({ pressed }) => [styles.linkRow, pressed && styles.linkRowPressed]}
           onPress={() => {
@@ -286,12 +373,32 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'space-between',
     paddingTop: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  statusText: {
+  statusLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  statusValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statusGranted: {
+    color: colors.success,
+  },
+  statusDenied: {
+    color: colors.warning,
+  },
+  activeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  activeText: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.success,

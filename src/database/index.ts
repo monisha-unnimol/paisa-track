@@ -3,6 +3,10 @@ export {
   CategoryDuplicateNameError,
   CategoryNotFoundError,
   CategorySaveError,
+  InvestmentTypeDuplicateNameError,
+  InvestmentTypeSaveError,
+  InvestmentTypeDeleteBlockedError,
+  InvestmentTypeNotFoundError,
 } from './errors';
 export { databaseService } from './databaseService';
 export type {
