@@ -58,7 +58,7 @@ export function WelcomeScreen({ navigation }: Props) {
         <Animated.View style={{ opacity: buttonOpacity }}>
           <PrimaryButton
             label="Get Started"
-            onPress={() => navigation.navigate('ProfileSetup')}
+            onPress={() => navigation.navigate('SetupMethod')}
             compact
           />
         </Animated.View>

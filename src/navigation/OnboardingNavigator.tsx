@@ -1,8 +1,10 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { CoachmarksScreen } from '../screens/onboarding/CoachmarksScreen';
 import { FirstAccountSetupScreen } from '../screens/onboarding/FirstAccountSetupScreen';
+import { OnboardingPostRestoreScreen } from '../screens/onboarding/OnboardingPostRestoreScreen';
 import { ProfileSetupScreen } from '../screens/onboarding/ProfileSetupScreen';
 import { PinSetupScreen } from '../screens/onboarding/PinSetupScreen';
+import { SetupMethodScreen } from '../screens/onboarding/SetupMethodScreen';
 import { SmsTrackingSetupScreen } from '../screens/onboarding/SmsTrackingSetupScreen';
 import { WelcomeScreen } from '../screens/onboarding/WelcomeScreen';
 import {
@@ -13,11 +15,13 @@ import { stackScreenOptions, successScreenOptions } from './stackScreenOptions';
 
 export type OnboardingStackParamList = {
   Welcome: undefined;
+  SetupMethod: undefined;
   ProfileSetup: undefined;
   PinSetup: { mode?: 'onboarding' | 'migration' } | undefined;
   FirstAccountSetup: { mode?: 'onboarding' | 'migration' } | undefined;
   SmsTrackingSetup: undefined;
   OperationSuccess: OperationSuccessStackParams['OperationSuccess'];
+  OnboardingPostRestore: undefined;
   Coachmarks: { smsTrackingStatus?: 'enabled' | 'skipped' } | undefined;
 };
 
@@ -29,6 +33,11 @@ export function OnboardingNavigator() {
       <Stack.Screen
         name="Welcome"
         component={WelcomeScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="SetupMethod"
+        component={SetupMethodScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
@@ -55,6 +64,11 @@ export function OnboardingNavigator() {
         name="OperationSuccess"
         component={OperationSuccessScreen}
         options={successScreenOptions}
+      />
+      <Stack.Screen
+        name="OnboardingPostRestore"
+        component={OnboardingPostRestoreScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Coachmarks"

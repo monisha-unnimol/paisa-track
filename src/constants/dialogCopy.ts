@@ -294,6 +294,13 @@ export const SMS_COPY = {
     message: 'Bank transaction SMS will be detected automatically on this device.',
     confirmLabel: 'Continue',
   },
+  restoreEnableSms: {
+    title: 'Enable SMS Tracking?',
+    message:
+      'Your backup had SMS tracking enabled. Grant SMS permission to continue using automatic transaction detection.',
+    confirmLabel: 'Enable',
+    cancelLabel: 'Skip',
+  },
 } as const;
 
 export const DELETE_DIALOG_COPY = {
@@ -506,6 +513,95 @@ export const SUCCESS_COPY = {
   pinUpdated: {
     title: 'PIN Updated',
     message: 'Your security PIN has been updated successfully.',
+  },
+  backupCreated: {
+    title: 'Backup Saved',
+    message: 'Your PaisaTrack backup has been saved successfully.',
+  },
+  pdfGenerated: {
+    title: 'PDF Generated',
+    message: 'Your financial report is ready.',
+  },
+  restoreComplete: {
+    title: 'Restore Complete',
+    message: 'Your PaisaTrack data has been restored successfully.',
+  },
+  backupRestored: {
+    title: 'Backup Restored',
+    message: 'Your PaisaTrack data has been restored successfully.',
+  },
+} as const;
+
+export const BACKUP_COPY = {
+  sensitiveDataWarning: {
+    title: 'Sensitive Data',
+    message:
+      'This backup contains financial information and should be stored securely.',
+    confirmLabel: 'Continue',
+    cancelLabel: 'Cancel',
+  },
+  restoreConfirm: {
+    title: 'Restore Backup?',
+    message:
+      'Restoring a backup will replace all current PaisaTrack data. This action cannot be undone.',
+    confirmLabel: 'Restore',
+    cancelLabel: 'Cancel',
+  },
+  onboardingRestoreConfirm: {
+    title: 'Restore Backup?',
+    message: 'Your saved PaisaTrack data will be restored.',
+    confirmLabel: 'Restore',
+    cancelLabel: 'Cancel',
+  },
+  invalidBackup: {
+    title: 'Invalid Backup File',
+    message: 'The selected file is not a valid PaisaTrack backup.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  restoreFailed: {
+    title: 'Restore Failed',
+    message: 'Something went wrong while restoring your backup. Please try again.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  backupFailed: {
+    title: 'Backup Failed',
+    message: 'Something went wrong while creating your backup. Please try again.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  pdfFailed: {
+    title: 'PDF Export Failed',
+    message: 'Something went wrong while generating your financial report. Please try again.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  exportCancelled: {
+    title: 'Save Cancelled',
+    message: 'The file was not saved because the save location was not selected.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  exportVerifyFailed: {
+    title: 'Save Failed',
+    message: 'The file could not be verified after saving. Please try again.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  exportFileNotFound: {
+    title: 'File Not Found',
+    message: 'The exported file could not be found. It may have been moved or deleted.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  unableToOpenFile: {
+    title: 'Unable to Open File',
+    message: 'No compatible application was found to open this file.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  sharingUnavailable: {
+    title: 'Sharing Unavailable',
+    message: 'File sharing is not available on this device.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
+  },
+  shareFailed: {
+    title: 'Share Failed',
+    message: 'Something went wrong while sharing the file. Please try again.',
+    confirmLabel: DIALOG_ACTIONS.gotIt,
   },
 } as const;
 

@@ -58,6 +58,8 @@ module.exports = {
         NSPhotoLibraryUsageDescription:
           'Allow PaisaTrack to access your photos to set a profile avatar.',
         ITSAppUsesNonExemptEncryption: false,
+        UIFileSharingEnabled: true,
+        LSSupportsOpeningDocumentsInPlace: true,
       },
     },
   },

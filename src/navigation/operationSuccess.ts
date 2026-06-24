@@ -5,6 +5,15 @@ export type OperationSuccessParams = {
   title: string;
   message: string;
   listRoute: string;
+  confirmLabel?: string;
+  secondaryLabel?: string;
+  tertiaryLabel?: string;
+  reloadApp?: boolean;
+  fileName?: string;
+  savedPath?: string;
+  openFileUri?: string;
+  shareUri?: string;
+  shareMimeType?: string;
 };
 
 export function navigateToOperationSuccess(

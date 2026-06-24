@@ -15,11 +15,12 @@ import {
 
 const MIN_SPLASH_MS = 1400;
 
-export function useAppBootstrap() {
+export function useAppBootstrap(reloadKey = 0) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setIsReady(false);
 
     async function bootstrap() {
       const startedAt = Date.now();
@@ -63,7 +64,7 @@ export function useAppBootstrap() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   return isReady;
 }

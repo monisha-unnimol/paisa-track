@@ -12,12 +12,24 @@ import {
   View,
 } from 'react-native';
 import { AppSwitch } from '../../components/AppSwitch';
+import { BackupRestoreDialogs } from '../../components/backup/BackupRestoreDialogs';
 import { Card } from '../../components/Card';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { SettingsDataActionRow } from '../../components/settings/SettingsDataActionRow';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { UserAvatar } from '../../components/UserAvatar';
-import { ERROR_COPY, SMS_COPY } from '../../constants/dialogCopy';
+import {
+  BACKUP_COPY,
+  ERROR_COPY,
+  SMS_COPY,
+  SUCCESS_COPY,
+} from '../../constants/dialogCopy';
 import { HomeStackParamList } from '../../navigation/HomeStackNavigator';
+import { navigateToOperationSuccess } from '../../navigation/operationSuccess';
+import { createAndSaveBackup } from '../../services/backup/backupService';
+import { createAndSavePdfReport } from '../../services/reports/pdfReportService';
+import { verifyExportFileExists } from '../../services/files/paisaTrackFileStorage';
+import { useBackupRestoreFlow } from '../../hooks/useBackupRestoreFlow';
 import { getSmsTrackingStatus } from '../../services/sms/smsTrackingService';
 import { isSmsListenerAvailable } from '../../services/sms/smsListenerService';
 import { useModalStore } from '../../store/useModalStore';
@@ -45,6 +57,24 @@ export function SettingsScreen({ navigation }: Props) {
   const [updating, setUpdating] = useState(false);
   const [explainVisible, setExplainVisible] = useState(false);
   const [invalidStateVisible, setInvalidStateVisible] = useState(false);
+  const [backupWarningVisible, setBackupWarningVisible] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const handleSettingsRestoreSuccess = useCallback(async () => {
+    navigateToOperationSuccess(navigation, {
+      title: SUCCESS_COPY.restoreComplete.title,
+      message: SUCCESS_COPY.restoreComplete.message,
+      listRoute: 'HomeMain',
+      confirmLabel: 'Restart App',
+      reloadApp: true,
+    });
+  }, [navigation]);
+
+  const restoreFlow = useBackupRestoreFlow({
+    onRestoreSuccess: handleSettingsRestoreSuccess,
+  });
+  const restoreBusy = restoreFlow.restoreBusy;
 
   const smsAvailable = Platform.OS === 'android' && isSmsListenerAvailable();
 
@@ -133,6 +163,111 @@ export function SettingsScreen({ navigation }: Props) {
     }
   };
 
+  const handleBackupPress = () => {
+    if (backupBusy) return;
+    setBackupWarningVisible(true);
+  };
+
+  const handleExportError = (reason: string, context: 'backup' | 'pdf' = 'backup') => {
+    if (reason === 'cancelled') {
+      showError(BACKUP_COPY.exportCancelled.title, BACKUP_COPY.exportCancelled.message);
+      return;
+    }
+
+    if (reason === 'verify_failed') {
+      showError(BACKUP_COPY.exportVerifyFailed.title, BACKUP_COPY.exportVerifyFailed.message);
+      return;
+    }
+
+    if (reason === 'generate_failed' || context === 'pdf') {
+      showError(BACKUP_COPY.pdfFailed.title, BACKUP_COPY.pdfFailed.message);
+      return;
+    }
+
+    showError(BACKUP_COPY.backupFailed.title, BACKUP_COPY.backupFailed.message);
+  };
+
+  const handleConfirmBackup = async () => {
+    setBackupWarningVisible(false);
+    setBackupBusy(true);
+    try {
+      const result = await createAndSaveBackup();
+      if (!result.ok) {
+        handleExportError(result.reason);
+        return;
+      }
+
+      const fileReady = await verifyExportFileExists(result.shareableUri);
+      if (!fileReady) {
+        showError(BACKUP_COPY.exportVerifyFailed.title, BACKUP_COPY.exportVerifyFailed.message);
+        return;
+      }
+
+      console.log('[Backup] Success navigation URIs:', {
+        savedUri: result.fileUri,
+        shareableUri: result.shareableUri,
+      });
+
+      navigateToOperationSuccess(navigation, {
+        title: SUCCESS_COPY.backupCreated.title,
+        message: SUCCESS_COPY.backupCreated.message,
+        listRoute: 'Settings',
+        confirmLabel: 'Done',
+        secondaryLabel: 'Share Backup',
+        fileName: result.fileName,
+        savedPath: result.displayPath,
+        shareUri: result.shareableUri,
+        shareMimeType: 'application/json',
+      });
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (pdfBusy || backupBusy || restoreBusy) return;
+
+    setPdfBusy(true);
+    try {
+      const result = await createAndSavePdfReport();
+      if (!result.ok) {
+        handleExportError(result.reason, 'pdf');
+        return;
+      }
+
+      const fileReady = await verifyExportFileExists(result.shareableUri);
+      if (!fileReady) {
+        showError(BACKUP_COPY.exportVerifyFailed.title, BACKUP_COPY.exportVerifyFailed.message);
+        return;
+      }
+
+      console.log('[PDF] Success navigation URIs:', {
+        savedUri: result.fileUri,
+        shareableUri: result.shareableUri,
+      });
+
+      navigateToOperationSuccess(navigation, {
+        title: SUCCESS_COPY.pdfGenerated.title,
+        message: SUCCESS_COPY.pdfGenerated.message,
+        listRoute: 'Settings',
+        confirmLabel: 'Done',
+        tertiaryLabel: 'Open PDF',
+        secondaryLabel: 'Share PDF',
+        fileName: result.fileName,
+        savedPath: result.displayPath,
+        openFileUri: result.shareableUri,
+        shareUri: result.shareableUri,
+        shareMimeType: 'application/pdf',
+      });
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const handleRestorePress = () => {
+    void restoreFlow.startRestore();
+  };
+
   if (!hydrated) {
     return (
       <ScreenContainer scrollable={false} omitTopInset>
@@ -143,6 +278,8 @@ export function SettingsScreen({ navigation }: Props) {
 
   return (
     <ScreenContainer omitTopInset>
+      <BackupRestoreDialogs flow={restoreFlow} />
+
       <ConfirmationModal
         visible={explainVisible}
         title={SMS_COPY.enableExplanation.title}
@@ -165,6 +302,17 @@ export function SettingsScreen({ navigation }: Props) {
           setInvalidStateVisible(false);
           clearSmsInvalidState();
         }}
+      />
+
+      <ConfirmationModal
+        visible={backupWarningVisible}
+        title={BACKUP_COPY.sensitiveDataWarning.title}
+        message={BACKUP_COPY.sensitiveDataWarning.message}
+        confirmLabel={BACKUP_COPY.sensitiveDataWarning.confirmLabel}
+        cancelLabel={BACKUP_COPY.sensitiveDataWarning.cancelLabel}
+        icon="shield-outline"
+        onConfirm={handleConfirmBackup}
+        onCancel={() => setBackupWarningVisible(false)}
       />
 
       <Pressable
@@ -273,6 +421,37 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.linkText}>Open system app settings</Text>
         </Pressable>
       )}
+
+      <Text style={styles.sectionLabel}>Data Management</Text>
+
+      <Card style={styles.dataCard}>
+        <SettingsDataActionRow
+          label="Backup Data"
+          subtitle="Create a backup of all PaisaTrack data"
+          icon="download-outline"
+          onPress={handleBackupPress}
+          disabled={backupBusy || restoreBusy || pdfBusy}
+          loading={backupBusy}
+        />
+        <SettingsDataActionRow
+          label="Restore Data"
+          subtitle="Restore data from a backup file"
+          icon="folder-open-outline"
+          onPress={handleRestorePress}
+          disabled={backupBusy || restoreBusy || pdfBusy}
+          loading={restoreBusy}
+          showDivider
+        />
+        <SettingsDataActionRow
+          label="Export PDF Report"
+          subtitle="Generate and save a financial report"
+          icon="document-text-outline"
+          onPress={handleExportPdf}
+          disabled={backupBusy || restoreBusy || pdfBusy}
+          loading={pdfBusy}
+          showDivider
+        />
+      </Card>
     </ScreenContainer>
   );
 }
@@ -418,5 +597,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
+  },
+  dataCard: {
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
   },
 });

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,6 +9,7 @@ import { GlobalModals } from './src/components/GlobalModals';
 import { useAppBootstrap } from './src/hooks/useAppBootstrap';
 import { navigationRef } from './src/navigation/navigationRef';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { subscribeAppReload } from './src/services/appReloadService';
 import { colors } from './src/theme/colors';
 
 const navigationTheme = {
@@ -22,8 +23,16 @@ const navigationTheme = {
 };
 
 export default function App() {
-  const isReady = useAppBootstrap();
+  const [reloadKey, setReloadKey] = useState(0);
+  const isReady = useAppBootstrap(reloadKey);
   const [showSplashOverlay, setShowSplashOverlay] = useState(true);
+
+  useEffect(() => {
+    return subscribeAppReload(() => {
+      setShowSplashOverlay(true);
+      setReloadKey((current) => current + 1);
+    });
+  }, []);
 
   const handleSplashExitComplete = useCallback(() => {
     setShowSplashOverlay(false);

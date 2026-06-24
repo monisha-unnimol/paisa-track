@@ -1205,6 +1205,242 @@ class DatabaseService {
       }) ?? null
     );
   }
+
+  async exportBackupTables(): Promise<{
+    accounts: Account[];
+    categories: Category[];
+    transactions: Transaction[];
+    investments: Investment[];
+    recurringExpenses: RecurringExpense[];
+    investmentTypes: InvestmentTypeDefinition[];
+    userProfile: UserProfile | null;
+    reviewRequests: ReviewRequest[];
+  }> {
+    const [
+      accounts,
+      categories,
+      transactions,
+      investments,
+      recurringExpenses,
+      investmentTypes,
+      userProfile,
+      reviewRequests,
+    ] = await Promise.all([
+      this.getAllAccounts(),
+      this.getAllCategories(),
+      this.getAllTransactions(),
+      this.getAllInvestments(),
+      this.getAllRecurringExpenses(),
+      this.getInvestmentTypes(),
+      this.getUserProfile(),
+      this.getReviewRequests(),
+    ]);
+
+    return {
+      accounts,
+      categories,
+      transactions,
+      investments,
+      recurringExpenses,
+      investmentTypes,
+      userProfile,
+      reviewRequests,
+    };
+  }
+
+  async clearAllUserData(): Promise<void> {
+    const db = await this.getDb();
+
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.execAsync('BEGIN TRANSACTION');
+
+    try {
+      await db.execAsync('DELETE FROM review_requests');
+      await db.execAsync('DELETE FROM transactions');
+      await db.execAsync('DELETE FROM investments');
+      await db.execAsync('DELETE FROM recurring_expenses');
+      await db.execAsync('DELETE FROM categories');
+      await db.execAsync('DELETE FROM accounts');
+      await db.execAsync('DELETE FROM user_profile');
+      await db.execAsync('DELETE FROM investment_types WHERE is_builtin = 0');
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    } finally {
+      await db.execAsync('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  async importBackupTables(backup: {
+    accounts: Account[];
+    categories: Category[];
+    transactions: Transaction[];
+    investments: Investment[];
+    recurringItems: RecurringExpense[];
+    investmentTypes: InvestmentTypeDefinition[];
+    userProfile: UserProfile | null;
+    reviewRequests: ReviewRequest[];
+  }): Promise<void> {
+    const db = await this.getDb();
+
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.execAsync('BEGIN TRANSACTION');
+
+    try {
+      for (const row of backup.investmentTypes.filter((item) => !item.isBuiltin)) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO investment_types
+           (id, slug, name, icon, color, is_builtin, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+          row.id,
+          row.slug,
+          row.name,
+          row.icon,
+          row.color,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      for (const row of backup.accounts) {
+        await db.runAsync(
+          `INSERT INTO accounts
+           (id, name, type, balance, icon, color, currency, is_default, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.name,
+          row.type,
+          row.balance,
+          row.icon,
+          row.color,
+          row.currency,
+          row.isDefault ? 1 : 0,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      for (const row of backup.categories) {
+        await db.runAsync(
+          `INSERT INTO categories
+           (id, name, icon, color, budget, account_id, scope, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.name,
+          row.icon,
+          row.color,
+          row.budget,
+          row.accountId,
+          row.scope,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      for (const row of backup.transactions) {
+        await db.runAsync(
+          `INSERT INTO transactions
+           (id, title, amount, category_id, account_id, date, type, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.title,
+          row.amount,
+          row.categoryId,
+          row.accountId,
+          row.date,
+          row.type,
+          row.notes,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      for (const row of backup.investments) {
+        await db.runAsync(
+          `INSERT INTO investments
+           (id, name, type, amount, account_id, deduction_day, start_date, notes, is_active,
+            last_processed_month, last_processed_date, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.name,
+          row.type,
+          row.amount,
+          row.accountId,
+          row.deductionDay,
+          row.startDate,
+          row.notes,
+          row.isActive ? 1 : 0,
+          row.lastProcessedMonth,
+          row.lastProcessedDate,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      for (const row of backup.recurringItems) {
+        await db.runAsync(
+          `INSERT INTO recurring_expenses
+           (id, name, amount, account_id, category_id, frequency, deduction_day, start_date,
+            end_date, notes, is_active, last_processed_cycle, last_processed_date, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.name,
+          row.amount,
+          row.accountId,
+          row.categoryId,
+          row.frequency,
+          row.deductionDay,
+          row.startDate,
+          row.endDate,
+          row.notes,
+          row.isActive ? 1 : 0,
+          row.lastProcessedCycle,
+          row.lastProcessedDate,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      if (backup.userProfile) {
+        const profile = backup.userProfile;
+        await db.runAsync(
+          `INSERT INTO user_profile (id, name, avatar, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)`,
+          profile.id,
+          profile.name,
+          profile.avatar,
+          profile.createdAt,
+          profile.updatedAt,
+        );
+      }
+
+      for (const row of backup.reviewRequests) {
+        await db.runAsync(
+          `INSERT INTO review_requests
+           (id, title, description, type, status, review_data, source, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          row.id,
+          row.title,
+          row.description,
+          row.type,
+          row.status,
+          row.reviewData,
+          row.source,
+          row.createdAt,
+          row.updatedAt,
+        );
+      }
+
+      await db.execAsync('COMMIT');
+    } catch (error) {
+      await db.execAsync('ROLLBACK');
+      throw error;
+    } finally {
+      await db.execAsync('PRAGMA foreign_keys = ON');
+      await this.ensureDefaultAccount();
+    }
+  }
 }
 
 export const databaseService = new DatabaseService();

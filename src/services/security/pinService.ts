@@ -81,3 +81,50 @@ export async function changePin(currentPin: string, newPin: string, length: PinL
 export function isValidPin(pin: string, length: PinLength): boolean {
   return new RegExp(`^\\d{${length}}$`).test(pin);
 }
+
+export type ExportedPinConfig = {
+  pinConfigured: boolean;
+  pinHash: string | null;
+  pinSalt: string | null;
+  pinLength: '4' | '6' | null;
+};
+
+export async function exportPinConfig(): Promise<ExportedPinConfig> {
+  try {
+    const [configured, pinHash, pinSalt, pinLength] = await Promise.all([
+      SecureStore.getItemAsync(PIN_CONFIGURED_KEY),
+      SecureStore.getItemAsync(PIN_HASH_KEY),
+      SecureStore.getItemAsync(PIN_SALT_KEY),
+      SecureStore.getItemAsync(PIN_LENGTH_KEY),
+    ]);
+
+    return {
+      pinConfigured: configured === 'true',
+      pinHash,
+      pinSalt,
+      pinLength: pinLength === '4' || pinLength === '6' ? pinLength : null,
+    };
+  } catch {
+    return {
+      pinConfigured: false,
+      pinHash: null,
+      pinSalt: null,
+      pinLength: null,
+    };
+  }
+}
+
+export async function restorePinConfig(config: ExportedPinConfig): Promise<void> {
+  if (!config.pinConfigured || !config.pinHash || !config.pinSalt || !config.pinLength) {
+    await SecureStore.deleteItemAsync(PIN_HASH_KEY).catch(() => undefined);
+    await SecureStore.deleteItemAsync(PIN_SALT_KEY).catch(() => undefined);
+    await SecureStore.deleteItemAsync(PIN_LENGTH_KEY).catch(() => undefined);
+    await SecureStore.deleteItemAsync(PIN_CONFIGURED_KEY).catch(() => undefined);
+    return;
+  }
+
+  await SecureStore.setItemAsync(PIN_HASH_KEY, config.pinHash);
+  await SecureStore.setItemAsync(PIN_SALT_KEY, config.pinSalt);
+  await SecureStore.setItemAsync(PIN_LENGTH_KEY, config.pinLength);
+  await SecureStore.setItemAsync(PIN_CONFIGURED_KEY, 'true');
+}
